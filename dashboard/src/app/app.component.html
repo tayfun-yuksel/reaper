@@ -1,0 +1,52 @@
+<!-- select stragety-->
+<!-- select exchange-->
+<!-- select currency-->
+<!-- enter amount-->
+
+<!-- list of running strategies--> <!-- profit/loss -->
+<style>
+  .select-container {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+  }
+  .select-container div {
+      flex-basis: 25%; 
+  }
+</style>
+
+<div class="select-container">
+  <div>
+      <h2>Select Strategy</h2>
+      <select id="strategy-select">
+          <option value="none">Select Strategy</option>
+          <option value="buy-and-hold">Buy and Hold</option>
+          <option value="technical-analysis">Technical Analysis</option>
+      </select>
+  </div>
+  <div>
+      <h2>Select Exchange</h2>
+      <select id="exchange-select">
+          <option value="none">Select Exchange</option>
+          <option value="coinbase">Coinbase</option>
+          <option value="binance">Binance</option>
+          <option value="kraken">Kraken</option>
+      </select>
+  </div>
+  <div>
+      <h2>Select Currency</h2>
+      <select id="currency-select">
+          <option value="none">Select Currency</option>
+          <option value="BTC">Bitcoin</option>
+          <option value="ETH">Ethereum</option>
+          <option value="LTC">Litecoin</option>
+      </select>
+  </div>
+  <div>
+      <h2>Enter Amount</h2>
+      <input type="number" id="amount-input">
+  </div>
+</div>
+
+<h2>List of Running Strategies</h2>
+<ul id="strategies-list"></ul>
