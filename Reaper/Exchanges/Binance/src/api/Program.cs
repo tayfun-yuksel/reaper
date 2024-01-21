@@ -1,4 +1,5 @@
-using Reaper.Exchanges.Binance.Api;
+using Reaper.Exchanges.Binance.Services;
+using Reaper.Exchanges.Binance.Services.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,7 +10,8 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddBinanceServices();
-
+builder.Configuration.AddUserSecrets<Program>();
+builder.Services.Configure<BinanceOptions>(builder.Configuration.GetSection("Binance"));
 
 var app = builder.Build();
 

@@ -1,7 +1,7 @@
 ﻿
 using NugetPacker;
 
-Version version = new(1, 0, 3);
+Version version = new(1, 0, 5);
 string nugetPath = "/Users/taf/localNugetStore";
 string commonLibProjectPath = "../../CommonLib/src/";
 string binancProjectPath = "../../Exchanges/Binance/src/";

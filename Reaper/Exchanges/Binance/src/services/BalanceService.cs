@@ -1,34 +1,27 @@
 using Flurl.Http;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Reaper.CommonLib.Interfaces;
+using Reaper.Exchanges.Binance.Services.ApiModels;
+using Reaper.Exchanges.Binance.Services.Configuration;
 
 namespace Reaper.Exchanges.Binance.Services;
-public class BalanceService(IConfiguration configuration) : IBalanceService
+public class BalanceService(IOptions<BinanceOptions> options) : IBalanceService
 {
-    private readonly string _logLevel = "error";
+    private readonly BinanceOptions _binanceOptions = options.Value;
 
-    public async Task<TBalance> GetBalanceAsync<TBalance>(CancellationToken cancellationToken)
-        where TBalance : class
+    public async Task<TBalance?> GetBalanceAsync<TBalance>(string symbol, CancellationToken cancellationToken)
+    where TBalance : class
     {
-        string apiKey = configuration["Binance:ApiKey"] ?? throw new InvalidOperationException(nameof(apiKey));
-        string secretKey = configuration["Binance:SecretKey"] ?? throw new InvalidOperationException(nameof(secretKey));
-
-        using var flurlClient = FlurlExtensions.GetFlurlClient(configuration);
-
-        var data = new{};
-        var balanceFn = async (IFlurlClient client, object requestData, CancellationToken cancellation) => 
+        using var flurlClient = FlurlExtensions.GetFlurlClient(_binanceOptions);
+        var balanceFn = async (IFlurlClient client, object? requestData, CancellationToken cancellation) => 
             await client.Request()
-                .WithSignature(secretKey, requestData)
-                .WithHeader("X-MBX-APIKEY", apiKey)
+                .AppendPathSegments("api", "v3", "account")
+                .WithHeader("X-MBX-APIKEY", _binanceOptions.ApiKey)
+                .WithSignedQueryParams(_binanceOptions.SecretKey, requestData)
                 .GetAsync(HttpCompletionOption.ResponseContentRead, cancellation)
-                .WithLogging(_logLevel)
-                .TryReceiveJson<string>();
-        var (response, error) = await balanceFn.CallAsync(flurlClient, data, cancellationToken);
-        if (error != null)
-        {
-            Console.WriteLine($"Error: {error}");
-            throw error;
-        }
-        return (response as TBalance)!;
+                .ReceiveJson<BalanceResponse>();
+        Result<BalanceResponse> result = await balanceFn.CallAsync(flurlClient, null, cancellationToken);
+        var balance = result.Data?.Balances.FirstOrDefault(b => b.Asset == symbol);
+        return balance as TBalance;
     }
 }
