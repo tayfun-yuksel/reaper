@@ -2,8 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 using Flurl.Http;
 using Microsoft.Extensions.Configuration;
+using Reaper.Exchanges.Kucoin.Services.Models;
 
-namespace Reaper.Exchanges.Services.Kucoin;
+namespace Reaper.Exchanges.Kucoin.Services;
 public static class FlurlExtensions
 {
     private static string CreateSignature(string strToSign, string secretKey)
@@ -13,23 +14,14 @@ public static class FlurlExtensions
         return Convert.ToBase64String(hash);
     }
 
-
-    public static IFlurlClient GetFlurlClient() => new FlurlClient("https://api.kucoin.com/api/v1")
-    {
-        Settings = {
-                Timeout = TimeSpan.FromMinutes(10)
-            }
-    };
-
-
     public static IFlurlRequest WithSignatureHeaders(this IFlurlRequest flurlRequest,
-        IConfiguration configuration,
+        KucoinOptions kucoinOptions,
         string method,
         string body = "")
     {
-        string apiKey = configuration["Kucoin:ApiKey"] ?? throw new InvalidOperationException(nameof(apiKey));
-        string apiSecret = configuration["Kucoin:ApiSecret"] ?? throw new InvalidOperationException(nameof(apiSecret));
-        string apiPassphrase = configuration["Kucoin:ApiPassphrase"] ?? throw new InvalidOperationException(nameof(apiPassphrase));
+        string apiKey = kucoinOptions.ApiKey ?? throw new InvalidOperationException(nameof(apiKey));
+        string apiSecret = kucoinOptions.ApiSecret ?? throw new InvalidOperationException(nameof(apiSecret));
+        string apiPassphrase = kucoinOptions.ApiPassphrase ?? throw new InvalidOperationException(nameof(apiPassphrase));
 
         var passphraseSignature = CreateSignature(apiPassphrase, apiSecret);
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
@@ -42,6 +34,28 @@ public static class FlurlExtensions
             .WithHeader("KC-API-TIMESTAMP", timestamp)
             .WithHeader("KC-API-PASSPHRASE", passphraseSignature)
             .WithHeader("KC-API-KEY-VERSION", "2");
+    }
+
+     public static async Task<Result<TResponse>> CallAsync<TResponse>(
+        this Func<IFlurlClient, object?, CancellationToken, Task<TResponse>> flurlCall,
+        IFlurlClient client,
+        object? data,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await flurlCall(client, data, cancellationToken);
+            return new() { Data = response };
+        }
+        catch (FlurlHttpException ex)
+        {
+            return new() { Error = ex };
+        }
+        catch (Exception ex)
+        {
+            return new() { Error = ex };
+        }
+        
     }
 
 }

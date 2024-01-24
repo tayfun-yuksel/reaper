@@ -10,22 +10,29 @@ public class BrokerController : ControllerBase
         
     }
 
+    [HttpGet(nameof(BuyLimitAsync))]
     public async Task BuyLimitAsync(string symbol, decimal quantity, decimal price, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
+    
 
+
+    [HttpGet(nameof(BuyMarketAsync))]
     public async Task BuyMarketAsync(string symbol, decimal quantity, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
 
 
+    [HttpGet(nameof(SellLimitAsync))]
     public async Task SellLimitAsync(string symbol, decimal quantity, decimal price, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
 
+
+    [HttpGet(nameof(SellMarketAsync))]
     public async Task SellMarketAsync(string symbol, decimal quantity, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();

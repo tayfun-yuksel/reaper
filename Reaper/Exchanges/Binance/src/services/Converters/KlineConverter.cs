@@ -17,13 +17,13 @@ public static class KlineConverter
             {
                 Kline marketData = new()
                 {
-                    OpenTime = element[0].GetUInt64(),
+                    OpenTime = element[0].GetInt64(),
                     Open = element[1].GetString(),
                     High = element[2].GetString(),
                     Low = element[3].GetString(),
                     Close = element[4].GetString(),
                     Volume = element[5].GetString(),
-                    CloseTime = element[6].GetUInt64(),
+                    CloseTime = element[6].GetInt64(),
                     BaseAssetVolume = element[7].GetString(),
                     NumberOfTrades = element[8].GetInt32(),
                     TakerBuyVolume = element[9].GetString(),

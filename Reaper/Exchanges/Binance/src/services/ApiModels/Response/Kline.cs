@@ -2,13 +2,13 @@ namespace Reaper.Exchanges.Binance.Services.ApiModels;
 public class Kline
 {
   // Using long for time values as they are likely Unix timestamps in milliseconds
-    public ulong OpenTime { get; set; }
+    public long OpenTime { get; set; }
     public string Open { get; set; } = string.Empty;
     public string High { get; set; } = string.Empty;
     public string Low { get; set; } = string.Empty;
     public string Close { get; set; } = string.Empty;
     public string Volume { get; set; } = string.Empty;
-    public ulong CloseTime { get; set; } 
+    public long CloseTime { get; set; } 
     public string BaseAssetVolume { get; set; } = string.Empty;
     public int NumberOfTrades { get; set; } 
     public string TakerBuyVolume { get; set; } = string.Empty;

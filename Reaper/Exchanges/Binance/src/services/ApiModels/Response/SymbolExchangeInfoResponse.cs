@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Reaper.Exchanges.Binance.Services.ApiModels;
 public class SymbolExchangeInfoResponse
 {

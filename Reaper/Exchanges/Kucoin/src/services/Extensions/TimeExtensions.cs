@@ -1,7 +1,6 @@
-
 using System.Globalization;
 
-namespace Reaper.Exchanges.Binance.Services;
+namespace Reaper.Exchanges.Kucoin.Services;
 public static class TimeExtensions
 {
     public static long ToUtcEpoch(this string dateStr)
@@ -11,14 +10,13 @@ public static class TimeExtensions
         var utcDateTime = TimeZoneInfo.ConvertTimeToUtc(dateTime);
 
         // Convert to epoch time
-        var epochTime = (long)(utcDateTime - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+        var epochTime = (long)(utcDateTime - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
 
         return epochTime;
     }
 
-    public static DateTime FromUtcEpoch(this long utcEpoch)
+    public static DateTime FromUtcMillliSeconds(this long milliseconds)
     {
-        var seconds = utcEpoch / 1000;
-        return DateTimeOffset.FromUnixTimeSeconds(seconds).UtcDateTime;
+        return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds).UtcDateTime;
     }
 }

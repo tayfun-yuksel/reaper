@@ -1,3 +1,6 @@
+using Reaper.CommonLib.Interfaces;
+using Reaper.Exchanges.Kucoin.Services;
+using Reaper.Exchanges.Kucoin.Services.Models;
 using Reaper.Exchanges.Services.Kucoin;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +12,12 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSignalR();
+
+builder.Configuration.AddUserSecrets<Program>();
+builder.Services.Configure<KucoinOptions>(builder.Configuration.GetSection("Kucoin"));
+builder.Services.AddScoped<IBrokerService, BrokerService>();
+builder.Services.AddScoped<IMarketDataService, MarketDataService>();
+builder.Services.AddScoped<IBackTestService, BackTestService>();
 
 var app = builder.Build();
 
@@ -24,6 +33,5 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHub<MarketDataHub>("/matketDataHub");
 
 app.Run();

@@ -31,36 +31,36 @@ public static class FlurlExtensions
     }
 
 
-    public static IFlurlClient GetFlurlClient(BinanceOptions binanceOptions)
-    {
-        var client = new FlurlClient(binanceOptions.BaseURL
-            ?? throw new InvalidOperationException("Binance:BaseURL is not configured"));
-        client.BeforeCall(async call =>
-        {
-            Console.WriteLine("OnBeforeCall:");
-            Console.WriteLine($"Request-Url: {call.Request.Url}");
-            var requestHeaders = call.Request.Headers;
-            var requestContent = call.Request.Content == null ? null : await call.Request.Content.ReadAsStreamAsync();
-            Console.WriteLine($"Request-Headers: {JsonSerializer.Serialize(requestHeaders)}");
-            Console.WriteLine($"Request-Content: {requestContent}");
-        });
+    // public static IFlurlClient GetFlurlClient(BinanceOptions binanceOptions)
+    // {
+    //     var client = new FlurlClient(binanceOptions.BaseURL
+    //         ?? throw new InvalidOperationException("Binance:BaseURL is not configured"));
+    //     client.BeforeCall(async call =>
+    //     {
+    //         Console.WriteLine("OnBeforeCall:");
+    //         Console.WriteLine($"Request-Url: {call.Request.Url}");
+    //         var requestHeaders = call.Request.Headers;
+    //         var requestContent = call.Request.Content == null ? null : await call.Request.Content.ReadAsStreamAsync();
+    //         Console.WriteLine($"Request-Headers: {JsonSerializer.Serialize(requestHeaders)}");
+    //         Console.WriteLine($"Request-Content: {requestContent}");
+    //     });
 
-        client.OnError(async call =>
-        {
-            Console.WriteLine("OnError:");
-            Console.WriteLine($"Request-Url: {call.Request.Url}");
-            Console.WriteLine($"Error: {call.Exception.Message}");
-            Console.WriteLine($"Response: {await call.Response.GetStringAsync()}");
-        });
+    //     client.OnError(async call =>
+    //     {
+    //         Console.WriteLine("OnError:");
+    //         Console.WriteLine($"Request-Url: {call.Request.Url}");
+    //         Console.WriteLine($"Error: {call.Exception.Message}");
+    //         Console.WriteLine($"Response: {await call.Response.GetStringAsync()}");
+    //     });
 
-        client.AfterCall(async call =>
-        {
-            Console.WriteLine("OnAfterCall:");
-            Console.WriteLine($"Request-Url: {call.Request.Url}");
-            Console.WriteLine($"Response: {await call.Response.GetStringAsync()}");
-        });
-        return client;
-    }
+    //     client.AfterCall(async call =>
+    //     {
+    //         Console.WriteLine("OnAfterCall:");
+    //         Console.WriteLine($"Request-Url: {call.Request.Url}");
+    //         // Console.WriteLine($"Response: {await call.Response.GetStringAsync()}");
+    //     });
+    //     return client;
+    // }
 
     public static async Task<Result<TResponse>> CallAsync<TResponse>(
         this Func<IFlurlClient, object?, CancellationToken, Task<TResponse>> flurlCall,

@@ -1,18 +1,20 @@
 using Flurl.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Reaper.CommonLib.Interfaces;
+using Reaper.Exchanges.Kucoin.Services.Models;
 using Reaper.Kucoin.Services.Models;
 
-namespace Reaper.Exchanges.Services.Kucoin;
-public class OrderService(IConfiguration configuration) : IOrderService
+namespace Reaper.Exchanges.Kucoin.Services;
+public class OrderService(IOptions<KucoinOptions> kucoinOptions) : IOrderService
 {
-    private readonly IConfiguration _configuration = configuration;
+    private readonly KucoinOptions _kucoinOptions = kucoinOptions.Value;
 
     public async  Task<IEnumerable<TOrder>> GetOrdersBySymbolAsync<TOrder>(string symbol, DateTime from, DateTime to)
         where TOrder : class
     {
         var method = "GET";
-        using var flurlClient = FlurlExtensions.GetFlurlClient();
+        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.BaseUrl, true);
         try
         {
             var body = new
@@ -24,7 +26,7 @@ public class OrderService(IConfiguration configuration) : IOrderService
             var response = await flurlClient.Request()
                 .AppendPathSegment("orders") 
                 // .SetQueryParams(body)
-                .WithSignatureHeaders(_configuration, method)
+                .WithSignatureHeaders(_kucoinOptions, method)
                 .GetAsync()
                 .ReceiveJson<OrdersResponse>();
             var filteredOrders = response.Data.Items!.Where(x => x.Symbol == symbol).ToList();

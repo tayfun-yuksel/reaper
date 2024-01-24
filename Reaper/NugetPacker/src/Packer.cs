@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Diagnostics.SymbolStore;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -18,18 +20,26 @@ public static class Packer
 
         throw new InvalidOperationException("Version not found");
     }
-    internal static void CleanTarget(string targetPath)
+    internal static void CleanTarget(string srcPath, string targetPath)
     {
         try
         {
             DirectoryInfo di = new(targetPath);
-            foreach (FileInfo file in di.GetFiles("*.nupkg", SearchOption.AllDirectories))
-            {
-                file.Delete();
-                Console.WriteLine($"Deleted {file.FullName}");
-            }
-            
-        }
+            DirectoryInfo srcDir = new(srcPath);
+            var oldCsProjFiles = srcDir.GetFiles("*.csproj", SearchOption.AllDirectories);
+            var nugetPackages = di.GetFiles("*.nupkg", SearchOption.AllDirectories);
+            nugetPackages.ToList()
+                .ForEach(nugetPkg => oldCsProjFiles.ToList()
+                .ForEach(csProj =>
+                {
+                    if (Path.GetFileNameWithoutExtension(csProj.Name)
+                        .Contains(ExtractPackageNameAndVersion(nugetPkg.FullName).name))
+                    {
+                        nugetPkg.Delete();
+                        Console.WriteLine($"deleted {nugetPkg.Name}");
+                    }
+                }));
+    }
         catch (System.Exception)
         {
             throw;
@@ -38,94 +48,94 @@ public static class Packer
 
 
     public static string[] GetCsProjFiles(string path)
+{
+    string[] csProjFiles = Directory.GetFiles(path, "*.csproj", SearchOption.AllDirectories);
+    return csProjFiles;
+}
+
+
+public static void Pack(string srcPath, string targetPath, Version version)
+{
+    CleanTarget(srcPath, targetPath);
+    string[] csProjFiles = Directory.GetFiles(srcPath, "*.csproj", SearchOption.AllDirectories);
+    foreach (var csProjFile in csProjFiles)
     {
-        string[] csProjFiles = Directory.GetFiles(path, "*.csproj", SearchOption.AllDirectories);
-        return csProjFiles;
+        string command = $"dotnet pack {csProjFile} -o {targetPath} -p:Version={version}";
+        Process process = new();
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            process.StartInfo.FileName = "cmd.exe";
+            process.StartInfo.Arguments = $"/c {command}";
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            process.StartInfo.FileName = "/bin/bash";
+            process.StartInfo.Arguments = $"-c \"{command}\"";
+        }
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.CreateNoWindow = true;
+        process.Start();
+        var output = process.StandardOutput.ReadToEnd();
+        Console.WriteLine(output);
+        process.WaitForExit();
     }
 
-
-    public static void Pack(string srcPath, string targetPath, Version version)
+    Console.WriteLine($"packing completed, updated packages");
+    foreach (var item in csProjFiles)
     {
-        CleanTarget(targetPath);
-        string[] csProjFiles = Directory.GetFiles(srcPath, "*.csproj", SearchOption.AllDirectories);
-        foreach (var csProjFile in csProjFiles)
+        Console.WriteLine(item);
+    }
+}
+
+
+
+internal static void UpdatePackageReference(string csProjFile, Dictionary<string, string> packagesToUpdate)
+{
+    try
+    {
+        XDocument doc = XDocument.Load(csProjFile);
+        var packageReferences = doc.Descendants("PackageReference");
+        foreach (var packageReference in packageReferences)
         {
-            string command = $"dotnet pack {csProjFile} -o {targetPath} -p:Version={version}";
-            Process process = new();
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            XAttribute packageName = packageReference.Attribute("Include")!;
+            Version srcVersion = new(packageReference.Attribute("Version")!.Value);
+            if (!packagesToUpdate.TryGetValue(packageName!.Value, out var targetVersionStr))
             {
-                process.StartInfo.FileName = "cmd.exe";
-                process.StartInfo.Arguments = $"/c {command}";
+                continue;
             }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            Version targetVersion = new(targetVersionStr);
+            if (srcVersion < targetVersion)
             {
-                process.StartInfo.FileName = "/bin/bash";
-                process.StartInfo.Arguments = $"-c \"{command}\"";
+                packageReference.Attribute("Version")!.Value = targetVersion.ToString();
             }
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.CreateNoWindow = true;
-            process.Start();
-            var output = process.StandardOutput.ReadToEnd();
-            Console.WriteLine(output);
-            process.WaitForExit();
-        }
-
-        Console.WriteLine($"packing completed, updated packages");
-        foreach (var item in csProjFiles)
-        {
-            Console.WriteLine(item);
-        }
-    }
-
-
-
-    internal static void UpdatePackageReference(string csProjFile, Dictionary<string, string> packagesToUpdate)
-    {
-        try
-        {
-            XDocument doc = XDocument.Load(csProjFile);
-            var packageReferences = doc.Descendants("PackageReference");
-            foreach (var packageReference in packageReferences)
+            else
             {
-                XAttribute packageName = packageReference.Attribute("Include")!;
-                Version srcVersion = new(packageReference.Attribute("Version")!.Value);
-                if (!packagesToUpdate.TryGetValue(packageName!.Value, out var targetVersionStr))
-                {
-                   continue;
-                }
-                Version targetVersion = new(targetVersionStr);
-                if (srcVersion < targetVersion)
-                {
-                    packageReference.Attribute("Version")!.Value = targetVersion.ToString();
-                }
-                else
-                {
-                    Console.WriteLine($"Package {packageName} version({srcVersion}) is greater than {targetVersion} in {csProjFile}");
-                }
+                Console.WriteLine($"Package {packageName} version({srcVersion}) is greater than {targetVersion} in {csProjFile}");
             }
-            doc.Save(csProjFile);
         }
-        catch (System.Exception)
-        {
-            throw;
-        }
+        doc.Save(csProjFile);
     }
-
-
-    public static void UpdateWith(this string[] csProjFiles, Dictionary<string, string> packagesToUpdate)
+    catch (System.Exception)
     {
-        foreach (var csProjFile in csProjFiles)
-        {
-            UpdatePackageReference(csProjFile, packagesToUpdate);
-        }
+        throw;
     }
+}
 
-    public static Dictionary<string, string> GetLocalNugets(string path)
+
+public static void UpdateWith(this string[] csProjFiles, Dictionary<string, string> packagesToUpdate)
+{
+    foreach (var csProjFile in csProjFiles)
     {
-        var packages = Directory.GetFiles(path, "*.nupkg", SearchOption.AllDirectories)
-            .Select(x => ExtractPackageNameAndVersion(x))
-            .ToDictionary(x => x.name, x => x.version);
-        return packages;
+        UpdatePackageReference(csProjFile, packagesToUpdate);
     }
+}
+
+public static Dictionary<string, string> GetLocalNugets(string path)
+{
+    var packages = Directory.GetFiles(path, "*.nupkg", SearchOption.AllDirectories)
+        .Select(x => ExtractPackageNameAndVersion(x))
+        .ToDictionary(x => x.name, x => x.version);
+    return packages;
+}
 }

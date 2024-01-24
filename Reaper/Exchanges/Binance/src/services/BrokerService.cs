@@ -1,9 +1,7 @@
-
 using System.Globalization;
 using Flurl.Http;
 using Microsoft.Extensions.Options;
 using Reaper.CommonLib.Interfaces;
-using Reaper.Exchanges.Binance.Interfaces;
 using Reaper.Exchanges.Binance.Services.ApiModels;
 using Reaper.Exchanges.Binance.Services.Configuration;
 
@@ -17,7 +15,7 @@ public class BrokerService(IMarketDataService marketDataService, IOptions<Binanc
 
     public async Task<bool> BuyLimitAsync(string symbol, decimal quantity, decimal price, CancellationToken cancellationToken)
     {
-        using var flurlClient = FlurlExtensions.GetFlurlClient(_binanceOptions);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_binanceOptions.BaseURL, false);
 
         var parameters = new
         {
@@ -59,7 +57,7 @@ public class BrokerService(IMarketDataService marketDataService, IOptions<Binanc
             throw new InvalidOperationException(@$"Quantity {quantity} is less than minNotional {minNotional}
                 Minimum Quantity: {minNotional / symbolPrice}");
         }
-        using var flurlClient = FlurlExtensions.GetFlurlClient(_binanceOptions);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_binanceOptions.BaseURL, false);
 
         var parameters = new
         {
@@ -95,7 +93,7 @@ public class BrokerService(IMarketDataService marketDataService, IOptions<Binanc
 
     public async Task<bool> SellMarketAsync(string symbol, decimal quantity, CancellationToken cancellationToken)
     {
-        using var flurlClient = FlurlExtensions.GetFlurlClient(_binanceOptions);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_binanceOptions.BaseURL, false);
         var parameters = new
         {
             symbol = symbol,

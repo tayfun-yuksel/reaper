@@ -12,7 +12,7 @@ public class BalanceService(IOptions<BinanceOptions> options) : IBalanceService
     public async Task<TBalance?> GetBalanceAsync<TBalance>(string symbol, CancellationToken cancellationToken)
     where TBalance : class
     {
-        using var flurlClient = FlurlExtensions.GetFlurlClient(_binanceOptions);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_binanceOptions.BaseURL, false);
         var balanceFn = async (IFlurlClient client, object? requestData, CancellationToken cancellation) => 
             await client.Request()
                 .AppendPathSegments("api", "v3", "account")

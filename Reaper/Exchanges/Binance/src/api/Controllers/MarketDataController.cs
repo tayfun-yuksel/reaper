@@ -1,6 +1,6 @@
 
 using Microsoft.AspNetCore.Mvc;
-using Reaper.Exchanges.Binance.Interfaces;
+using Reaper.Exchanges.Binance.Services;
 
 namespace Reaper.Exchanges.Binance.Api;
 [ApiController]
@@ -26,9 +26,12 @@ public class MarketDataController(IMarketDataService marketDataService) : Contro
 
 
     [HttpGet(nameof(GetKlines))]
-    public async Task<IActionResult> GetKlines(string symbol, string startTime, string? endTime, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetKlines(string symbol,
+        string startTime,
+        string? endTime,
+        string interval, CancellationToken cancellationToken)
     {
-        var klines = await _marketDataService.GetKlinesAsync(symbol, startTime, endTime, cancellationToken);
+        var klines = await _marketDataService.GetKlinesAsync(symbol, startTime, endTime, interval, cancellationToken);
         return Ok(klines);
     }
 }
