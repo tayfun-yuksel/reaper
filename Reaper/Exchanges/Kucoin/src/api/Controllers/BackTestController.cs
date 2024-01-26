@@ -6,20 +6,30 @@ namespace Reaper.Exchanges.Binance.Api;
 [Route("[controller]")]
 public class BackTestController(IBackTestService backTestService, IMarketDataService marketDataService) : ControllerBase
 {
-    private readonly IBackTestService _backTestService = backTestService;
-    private readonly IMarketDataService _marketDataService = marketDataService;
-
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="symbol"></param>
+    /// <param name="startTime"></param>
+    /// <param name="endTime"></param>
+    /// <param name="interval">1,5,15,30,60,120,240,480,720,1440,10080.</param>
+    /// <param name="strategy"></param>
+    /// <param name="tradeAmount"></param>
+    /// <param name="volumeFactor"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     [HttpGet(nameof(BackTest))]
     public async Task<IActionResult> BackTest(string symbol,
         string startTime,
         string? endTime,
-        string interval,
+        int interval,
         string strategy,
         decimal tradeAmount,
+        decimal? volumeFactor,
         CancellationToken cancellationToken)
     {
-        var klines = await _marketDataService.GetFutureKlinesAsync(symbol, startTime, endTime, interval, cancellationToken);
-        var finalAmount = _backTestService.BackTest(tradeAmount, klines, strategy, cancellationToken);
+        var klines = await marketDataService.GetKlinesAsync(symbol, startTime, endTime, interval, cancellationToken);
+        var finalAmount = backTestService.BackTest(tradeAmount, klines, strategy, volumeFactor, cancellationToken);
         return Ok(finalAmount);
     }
 }

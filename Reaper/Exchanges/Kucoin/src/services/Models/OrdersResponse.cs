@@ -1,4 +1,4 @@
-namespace Reaper.Kucoin.Services.Models;
+namespace Reaper.Exchanges.Kucoin.Services.Models;
 public class OrdersResponse
 {
     public string Code { get; set; }

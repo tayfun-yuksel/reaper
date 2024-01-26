@@ -1,17 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
-namespace Reaper.Kucoin.Api.Controllers;
+using Reaper.CommonLib.Interfaces;
+namespace Reaper.Exchanges.Kucoin.Api;
 
 [ApiController]
 [Route("[controller]")]
-public class BrokerController : ControllerBase
+public class BrokerController(IBrokerService brokerService) : ControllerBase
 {
-    public BrokerController()
-    {
-        
-    }
 
     [HttpGet(nameof(BuyLimitAsync))]
-    public async Task BuyLimitAsync(string symbol, decimal quantity, decimal price, CancellationToken cancellationToken)
+    public Task BuyLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -19,22 +16,24 @@ public class BrokerController : ControllerBase
 
 
     [HttpGet(nameof(BuyMarketAsync))]
-    public async Task BuyMarketAsync(string symbol, decimal quantity, CancellationToken cancellationToken)
+    public async Task<IActionResult> BuyMarketAsync(string symbol, decimal amount, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var response = await brokerService.BuyMarketAsync(symbol, amount, cancellationToken);
+        return Ok(response);
     }
 
 
     [HttpGet(nameof(SellLimitAsync))]
-    public async Task SellLimitAsync(string symbol, decimal quantity, decimal price, CancellationToken cancellationToken)
+    public Task SellLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
 
 
     [HttpGet(nameof(SellMarketAsync))]
-    public async Task SellMarketAsync(string symbol, decimal quantity, CancellationToken cancellationToken)
+    public async Task<IActionResult> SellMarketAsync(string symbol, decimal quantity, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var response = await brokerService.SellMarketAsync(symbol, quantity, cancellationToken);
+        return Ok(response);
     }
 }

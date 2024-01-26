@@ -5,5 +5,5 @@ public enum SignalType
     Undefined,
     Buy,
     Sell,
-    NoSignal
+    Hold
 }

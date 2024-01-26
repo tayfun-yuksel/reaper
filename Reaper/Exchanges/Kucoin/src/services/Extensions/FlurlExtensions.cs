@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Flurl.Http;
-using Microsoft.Extensions.Configuration;
+using Reaper.CommonLib.Interfaces;
 using Reaper.Exchanges.Kucoin.Services.Models;
 
 namespace Reaper.Exchanges.Kucoin.Services;
@@ -17,7 +17,7 @@ public static class FlurlExtensions
     public static IFlurlRequest WithSignatureHeaders(this IFlurlRequest flurlRequest,
         KucoinOptions kucoinOptions,
         string method,
-        string body = "")
+        string jsonBody = "")
     {
         string apiKey = kucoinOptions.ApiKey ?? throw new InvalidOperationException(nameof(apiKey));
         string apiSecret = kucoinOptions.ApiSecret ?? throw new InvalidOperationException(nameof(apiSecret));
@@ -25,7 +25,14 @@ public static class FlurlExtensions
 
         var passphraseSignature = CreateSignature(apiPassphrase, apiSecret);
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-        var strForSign = timestamp + method + flurlRequest.Url.Path + body;
+        var query  = string.IsNullOrEmpty(flurlRequest.Url.Query) ? string.Empty : $"?{flurlRequest.Url.Query}";
+
+        var strForSign = timestamp 
+            + method 
+            + Uri.UnescapeDataString(flurlRequest.Url.Path + query)
+            + jsonBody;
+
+
         var httpSignature = CreateSignature(strForSign, apiSecret);
 
         return flurlRequest

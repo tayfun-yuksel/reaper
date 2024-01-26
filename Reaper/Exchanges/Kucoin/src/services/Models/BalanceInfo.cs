@@ -1,4 +1,4 @@
-namespace Reaper.Kucoin.Services.Models;
+namespace Reaper.Exchanges.Kucoin.Services.Models;
 public class BalanceInfo
 {
     public string Id { get; set; } = string.Empty;

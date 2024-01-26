@@ -1,7 +1,7 @@
 ﻿
 using NugetPacker;
 
-Version version = new(1, 1, 1);
+Version version = new(1, 1, 242);
 string nugetPath = "/Users/taf/localNugetStore";
 string commonLibProjectPath = "../../CommonLib/src/";
 string signaleSentinelProjectPath = "../../SignalSentinel/src/";

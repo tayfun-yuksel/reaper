@@ -1,7 +1,7 @@
 using Reaper.CommonLib.Interfaces;
+using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.Exchanges.Kucoin.Services;
 using Reaper.Exchanges.Kucoin.Services.Models;
-using Reaper.Exchanges.Services.Kucoin;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,8 +16,13 @@ builder.Services.AddSignalR();
 builder.Configuration.AddUserSecrets<Program>();
 builder.Services.Configure<KucoinOptions>(builder.Configuration.GetSection("Kucoin"));
 builder.Services.AddScoped<IBrokerService, BrokerService>();
-builder.Services.AddScoped<IMarketDataService, MarketDataService>();
+builder.Services.AddScoped<IBalanceService, BalanceService>();
+builder.Services.AddScoped<IMarketDataService, FuturesMarketDataService>();
 builder.Services.AddScoped<IBackTestService, BackTestService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IPositionService, PositionService>();
+builder.Services.AddScoped<IStrategyService, StrategyService>();
+builder.Services.AddScoped<ITilsonService, TilsonService>();
 
 var app = builder.Build();
 

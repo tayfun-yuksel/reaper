@@ -1,5 +1,4 @@
-
-namespace Reaper.Exchanges.Kucoin.Services.Models;
+namespace Reaper.CommonLib.Interfaces;
 public class Result<TResponse>()
 {
     public TResponse? Data { get; set; }

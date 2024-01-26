@@ -12,6 +12,7 @@
 //   ["1545904920", "0.058", "0.072", "0.072", "0.058", "0.103", "0.006986"]
 // ]
 using System.Text.Json;
+using Reaper.CommonLib.Interfaces;
 using Reaper.Exchanges.Kucoin.Services.Models;
 
 namespace Reaper.Exchanges.Kucoin.Services.Converters;
@@ -34,13 +35,13 @@ public static class KlineConverter
             {
                 SpotKline marketData = new()
                 {
-                    OpenTime = element[0].GetString(),
-                    Open = element[1].GetString(),
-                    Close = element[2].GetString(),
-                    High = element[3].GetString(),
-                    Low = element[4].GetString(),
-                    Volume = element[5].GetString(),
-                    TransactionAmount = element[6].GetString(),
+                    OpenTime = element[0].GetString()!,
+                    Open = element[1].GetString()!,
+                    Close = element[2].GetString()!,
+                    High = element[3].GetString()!,
+                    Low = element[4].GetString()!,
+                    Volume = element[5].GetString()!,
+                    TransactionAmount = element[6].GetString()!,
                 };
                 marketDataList.Add(marketData);
             }

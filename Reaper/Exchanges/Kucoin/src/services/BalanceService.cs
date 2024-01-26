@@ -1,28 +1,32 @@
-using Reaper.Kucoin.Services.Models;
 using Flurl.Http;
 using Reaper.CommonLib.Interfaces;
-using Microsoft.Extensions.Configuration;
 using Reaper.Exchanges.Kucoin.Services.Models;
 using Microsoft.Extensions.Options;
+using System.Dynamic;
+using Newtonsoft.Json;
 
 namespace Reaper.Exchanges.Kucoin.Services;
 public class BalanceService(IOptions<KucoinOptions> kucoinOptions) : IBalanceService
 {
     private readonly KucoinOptions _kucoinOptions = kucoinOptions.Value;
 
-    public async Task<TBalance?> GetBalanceAsync<TBalance>(string symbol, CancellationToken cancellationToken)
+    public async Task<TBalance?> GetBalanceAsync<TBalance>(string? symbol, CancellationToken cancellationToken)
         where TBalance : class
     {
-        var method = "GET";
         using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.BaseUrl, true);
-        var response = await flurlClient.Request()
-            .AppendPathSegments("api", "v1", "accounts")
-            .WithSignatureHeaders(_kucoinOptions, method)
-            .GetAsync(cancellationToken: cancellationToken)
-            .ReceiveJson<AccountBalance>();
-        var usdtBalance = response.Data.First(x => x.Currency == symbol);
-        Console.WriteLine($"{symbol} balance: {usdtBalance.Balance}"); 
-        return (usdtBalance as TBalance) 
-            ?? throw new InvalidOperationException(nameof(usdtBalance));
+        var getBalanceFn = async (IFlurlClient client, object? requestData, CancellationToken cancellation) =>
+            await client.Request()
+                .AppendPathSegments("api", "v1", "accounts")
+                .WithSignatureHeaders(_kucoinOptions, "GET")
+                .GetAsync(HttpCompletionOption.ResponseContentRead, cancellation)
+                .ReceiveString();
+
+        Result<string> result = await getBalanceFn.CallAsync(flurlClient, null, cancellationToken);
+        dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
+
+        var symbolInfo = ((IEnumerable<dynamic>)response.data).First(x => x.currency == (symbol?.ToUpper() ?? "USDT"));
+        var balance = (symbolInfo.balance as TBalance) 
+            ?? throw new InvalidOperationException(nameof(symbolInfo.balance));
+        return balance;
     }
 }

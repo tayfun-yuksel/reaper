@@ -3,12 +3,24 @@ using Reaper.SignalSentinel.Strategies;
 namespace Reaper.Exchanges.Kucoin.Services;
 public class BackTestService : IBackTestService
 {
-    public decimal BackTest(decimal tradeAmount, IEnumerable<decimal> prices, string strategy, CancellationToken cancellationToken)
+    public decimal BackTest(decimal tradeAmount, IEnumerable<decimal> prices, string strategy, decimal? volumeFactor, CancellationToken cancellationToken)
+    {
+        volumeFactor ??= 0.7m;
+
+        return strategy.ToLower() switch
+        {
+            "tilsont3" => HandleTilsonT3(tradeAmount, prices, (decimal)volumeFactor, cancellationToken),
+            _ => 0
+        };
+    }
+
+
+    public static decimal HandleTilsonT3(decimal tradeAmount, IEnumerable<decimal> prices, decimal volumeFactor, CancellationToken cancellationToken)
     {
         var pricesList = prices.ToList();
         pricesList.Reverse();
         var shortEntryIndex = 3;
-        var t3Values = TilsonT3.CalculateT3([.. pricesList], period: 6, volumeFactor: 1.3m);
+        var t3Values = TilsonT3.CalculateT3([.. pricesList], period: 6, volumeFactor);
         int buySignalCount = 0;
         int sellSignalCount = 0;
         int noSignalCount = 0;
