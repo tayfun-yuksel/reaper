@@ -3,6 +3,8 @@ using System.Globalization;
 namespace Reaper.Exchanges.Kucoin.Services;
 public static class TimeExtensions
 {
+    public static readonly List<int> AllowedIntervalInMinutes = [1, 3, 5, 15, 30, 60, 120, 240, 480, 720, 1440, 10080];
+
     public static long ToUtcEpochMs(this string dateStr)
     {
         string[] formats = ["dd-MM-yyyy HH:mm", "dd-MM-yyyy"]; 
@@ -23,18 +25,9 @@ public static class TimeExtensions
         return epochTime;
     }
 
-    public static DateTime FromUtcMs(this long milliseconds)
+    public static DateTime FromUtcMsToLocalTime(this long milliseconds)
     {
-        return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds).UtcDateTime;
-    }
-
-    public static string GetStartTimeFromInterval(int interval)
-    {
-        var allowedIntervalInMinutes = new List<int> { 1, 3, 5, 15, 30, 60, 120, 240, 360, 720, 1440, 10080};
-        if (!allowedIntervalInMinutes.Contains(interval))
-        {
-            throw new ArgumentException("Interval must be one of the following: " + string.Join(", ", allowedIntervalInMinutes));
-        }
-        return string.Empty;
+        var res = DateTimeOffset.FromUnixTimeMilliseconds(milliseconds).DateTime.ToLocalTime();
+        return res;
     }
 }

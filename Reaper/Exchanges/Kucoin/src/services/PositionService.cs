@@ -1,17 +1,21 @@
+using System.Dynamic;
 using Flurl.Http;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using Reaper.CommonLib.Interfaces;
+using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.Exchanges.Kucoin.Services.Models;
 
 namespace Reaper.Exchanges.Kucoin.Services;
-public class PositionService(IOptions<KucoinOptions> options) : IPositionService
+public class PositionService(IOptions<KucoinOptions> options, 
+    IMarketDataService marketDataService) : IPositionService
 {
     private readonly KucoinOptions _kucoinOptions = options.Value;
 
-    public async Task<string> GetPositionDetailsAsync(string symbol, CancellationToken cancellationToken)
+    public async Task<decimal> GetPositionAmountAsync(string symbol, CancellationToken cancellationToken)
     {
         using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.FuturesBaseUrl, true);
-        var closePositionFn = async (IFlurlClient client, object? requestData, CancellationToken cancellation) =>
+        var getPositionFn = async (IFlurlClient client, object? requestData, CancellationToken cancellation) =>
             await client.Request()
                 .AppendPathSegments("api", "v1", "position")
                 .SetQueryParams(requestData)
@@ -19,21 +23,18 @@ public class PositionService(IOptions<KucoinOptions> options) : IPositionService
                 .GetAsync(HttpCompletionOption.ResponseContentRead, cancellation)
                 .ReceiveString();
 
-        Result<string> result = await closePositionFn.CallAsync(flurlClient, new
+        Result<string> result = await getPositionFn.CallAsync(flurlClient, new
         {
             symbol = symbol.ToUpper()
         }, cancellationToken);
 
         if (result.Error != null)
         {
-            return result.Error.Message;
+            throw new InvalidOperationException("Error getting position details", result.Error);
         }
-        return result.Data!;
+        dynamic positionDetails = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
+        var positionAmount = Math.Abs((decimal)positionDetails.data.markValue) + (decimal)positionDetails.data.realisedPnl;
+        return positionAmount;
     }
 
-}
-
-public interface IPositionService
-{
-    Task<string> GetPositionDetailsAsync(string symbol, CancellationToken cancellationToken);
 }

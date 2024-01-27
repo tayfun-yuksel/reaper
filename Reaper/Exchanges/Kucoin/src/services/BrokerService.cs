@@ -1,10 +1,9 @@
 using System.Dynamic;
-using System.Text.Json;
 using Flurl.Http;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Reaper.CommonLib.Interfaces;
-using Reaper.Exchanges.Kucoin.Services;
+using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.Exchanges.Kucoin.Services.Models;
 
 namespace Reaper.Exchanges.Kucoin.Services;
@@ -68,14 +67,8 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
 
     internal async Task<decimal> GetDifferenceAsync(string position, string symbol, decimal amount, CancellationToken cancellationToken)
     {
-        var positionDetailsStr = await positionService.GetPositionDetailsAsync(symbol, cancellationToken);
-        dynamic positionDetails = JsonConvert.DeserializeObject<ExpandoObject>(positionDetailsStr);
-        long currentQuantity = (long)positionDetails.data.currentQty;
-
-        decimal currentMarketPrice = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
-
-        var placedAmount = currentQuantity * currentMarketPrice; 
-        var difference = position == "long" ? amount - placedAmount : amount + placedAmount;
+        var positionAmount = await positionService.GetPositionAmountAsync(symbol, cancellationToken);
+        var difference =  amount - positionAmount ;
         return difference;
     }
 

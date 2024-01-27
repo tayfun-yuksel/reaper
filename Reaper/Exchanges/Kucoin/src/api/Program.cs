@@ -21,7 +21,6 @@ builder.Services.AddScoped<IMarketDataService, FuturesMarketDataService>();
 builder.Services.AddScoped<IBackTestService, BackTestService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPositionService, PositionService>();
-builder.Services.AddScoped<IStrategyService, StrategyService>();
 builder.Services.AddScoped<ITilsonService, TilsonService>();
 
 var app = builder.Build();

@@ -1,11 +1,48 @@
 using Reaper.SignalSentinel.Strategies;
 
 namespace Reaper.Exchanges.Kucoin.Services;
-public class BackTestService : IBackTestService
+public class BackTestService(IMarketDataService marketDataService) : IBackTestService
 {
-    public decimal BackTest(decimal tradeAmount, IEnumerable<decimal> prices, string strategy, decimal? volumeFactor, CancellationToken cancellationToken)
+    public async Task<decimal> BackTestAsync(string symbol, string startTime,
+        string? endTime,
+        int interval,
+        decimal tradeAmount,
+        string strategy,
+        decimal? volumeFactor,
+        CancellationToken cancellationToken)
     {
         volumeFactor ??= 0.7m;
+        var getFromAndToTimeFn = (string startTime, int interval) =>
+        {
+            int klinesLimit = 200;
+            long from = startTime.ToUtcEpochMs(); 
+            long msMultiplier = 60 * 1000;
+            long range = interval * klinesLimit * msMultiplier;
+            long to = from + range;
+
+            if (to > DateTime.UtcNow.Ticks)
+            {
+                to = DateTime.UtcNow.Ticks;
+            }
+            var fromStr = from.FromUtcMsToLocalTime().ToString("dd-MM-yyyy HH:mm");
+            var endStr = to.FromUtcMsToLocalTime().ToString("dd-MM-yyyy HH:mm");
+            return (fromStr, endStr);
+        };
+
+        List<decimal> prices = [];
+        var (from, to) = getFromAndToTimeFn(startTime, interval);
+        while (true)
+        {
+            var klines = await marketDataService.GetKlinesAsync(symbol, from, to, interval, cancellationToken);
+            from = to;
+            (from, to) = getFromAndToTimeFn(from, interval);
+
+            prices.AddRange(klines);
+            if (!klines.Any())
+            {
+                break;
+            }
+        }
 
         return strategy.ToLower() switch
         {
@@ -17,49 +54,59 @@ public class BackTestService : IBackTestService
 
     public static decimal HandleTilsonT3(decimal tradeAmount, IEnumerable<decimal> prices, decimal volumeFactor, CancellationToken cancellationToken)
     {
+        var signalType = SignalType.Undefined;
         var pricesList = prices.ToList();
         pricesList.Reverse();
-        var shortEntryIndex = 3;
-        var t3Values = TilsonT3.CalculateT3([.. pricesList], period: 6, volumeFactor);
+
+        int period = 6;
+        var t3Values = TilsonT3.CalculateT3([.. pricesList], period, volumeFactor);
+
         int buySignalCount = 0;
         int sellSignalCount = 0;
         int noSignalCount = 0;
         decimal longEntryPrice = 0;
         decimal shortEntryPrice = 0;
-        decimal longAssets = 0;
-        decimal shortAssets = 0;
-        for (int i = 0; i < pricesList.Count; i++)
+
+        for (int i = period - 1; i < pricesList.Count; i++)
         {
             decimal currentPrice = pricesList[i];
-            var enterShort = shortEntryIndex <= 0;
-            if (pricesList[i] < t3Values[i])
+            decimal assests = tradeAmount / currentPrice;
+            decimal realizedProfit;
+            if (signalType != SignalType.Buy && pricesList[i] < t3Values[i])
             {
-                shortEntryIndex++;
-                tradeAmount += shortAssets * (shortEntryPrice - currentPrice);
+                if (signalType == SignalType.Sell)
+                {
+                    realizedProfit = (shortEntryPrice - currentPrice) * assests;
+                    tradeAmount += realizedProfit;
+                    Console.WriteLine($"Realized Profit: {realizedProfit}");
+                }
+
                 longEntryPrice = currentPrice;
-                longAssets = tradeAmount / currentPrice;
-                shortAssets = 0;
+                signalType = SignalType.Buy;
                 buySignalCount++;
-                // Console.WriteLine($"Buy Signal");
+                Console.WriteLine($"Buy Signal");
                 // Console.WriteLine($"currentPrice: {currentPrice}"); 
                 // Console.WriteLine($"tradeAmount: {tradeAmount} ");
             }
-            else if (pricesList[i] > t3Values[i])
+            else if (signalType != SignalType.Sell && pricesList[i] > t3Values[i])
             {
-                shortEntryIndex -= 2;
-                tradeAmount += longAssets * (currentPrice - longEntryPrice);
+                if (signalType == SignalType.Buy)
+                {
+                    realizedProfit = (currentPrice - longEntryPrice) * assests;
+                    tradeAmount += realizedProfit;
+                    Console.WriteLine($"Realized Profit: {realizedProfit}");
+                }
                 shortEntryPrice = currentPrice;
-                shortAssets = tradeAmount / currentPrice;
-                longAssets = 0;
+                signalType = SignalType.Sell;
                 sellSignalCount++;
-                // Console.WriteLine($"Sell Signal");
+                Console.WriteLine($"Sell Signal");
                 // Console.WriteLine($"currentPrice: {currentPrice}"); 
                 // Console.WriteLine($"tradeAmount: {tradeAmount} ");
             }
             else
             {
                 noSignalCount++;
-                // Console.WriteLine($"NO SIGNAL");
+                Console.WriteLine($"NO SIGNAL");
             }
             // Console.WriteLine($"Trade Amount: {tradeAmount}"); 
             // Console.WriteLine($"longAssets: {longAssets} ");

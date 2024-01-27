@@ -1,5 +1,3 @@
-
-using System.Security.Principal;
 using Microsoft.AspNetCore.Mvc;
 using Reaper.Exchanges.Kucoin.Interfaces;
 

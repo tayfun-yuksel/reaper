@@ -1,5 +1,5 @@
 namespace Reaper.Exchanges.Kucoin.Services;
 public interface IBackTestService
 {
-    decimal BackTest(decimal tradeAmount, IEnumerable<decimal> prices, string strategy, decimal? volumeFactor, CancellationToken cancellationToken);
+    Task<decimal> BackTestAsync(string symbol, string startTime, string? endTime, int interval, decimal tradeAmount, string strategy, decimal? volumeFactor, CancellationToken cancellationToken);
 }

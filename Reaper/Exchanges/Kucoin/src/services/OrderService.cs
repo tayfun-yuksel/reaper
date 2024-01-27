@@ -1,7 +1,5 @@
-using System.Dynamic;
 using Flurl.Http;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
 using Reaper.CommonLib.Interfaces;
 using Reaper.Exchanges.Kucoin.Services.Models;
 

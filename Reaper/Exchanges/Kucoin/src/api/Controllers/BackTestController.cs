@@ -4,7 +4,7 @@ using Reaper.Exchanges.Kucoin.Services;
 namespace Reaper.Exchanges.Binance.Api;
 [ApiController]
 [Route("[controller]")]
-public class BackTestController(IBackTestService backTestService, IMarketDataService marketDataService) : ControllerBase
+public class BackTestController(IBackTestService backTestService) : ControllerBase
 {
     /// <summary>
     /// 
@@ -28,8 +28,12 @@ public class BackTestController(IBackTestService backTestService, IMarketDataSer
         decimal? volumeFactor,
         CancellationToken cancellationToken)
     {
-        var klines = await marketDataService.GetKlinesAsync(symbol, startTime, endTime, interval, cancellationToken);
-        var finalAmount = backTestService.BackTest(tradeAmount, klines, strategy, volumeFactor, cancellationToken);
+        if (!TimeExtensions.AllowedIntervalInMinutes.Contains(interval))
+        {
+            throw new ArgumentException("Interval must be one of the following: " 
+                + string.Join(", ", TimeExtensions.AllowedIntervalInMinutes));
+        }
+        var finalAmount = await backTestService.BackTestAsync(symbol, startTime, endTime, interval, tradeAmount, strategy, volumeFactor, cancellationToken);
         return Ok(finalAmount);
     }
 }

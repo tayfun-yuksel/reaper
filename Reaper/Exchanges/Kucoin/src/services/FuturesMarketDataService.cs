@@ -70,14 +70,7 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
         }
 
         var klines = result.Data!.ToFuturesKlineArray().Data;
-        int count = 0;
-        klines!.ForEach(x =>
-        {
-            Console.WriteLine($"Kline {count++}: {x.Time.FromUtcMs()}"); 
-            Console.WriteLine($"price: {x.ClosePrice}");
-        });
-
-        var prices = klines
+        var prices = klines!
             .Select(x => x.ClosePrice)
             .ToList() as IEnumerable<decimal>;
 
