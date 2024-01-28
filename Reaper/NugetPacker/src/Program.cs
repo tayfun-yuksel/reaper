@@ -2,7 +2,7 @@
 using NugetPacker;
 
 Version version = new(1, 1, 242);
-string nugetPath = "/Users/taf/localNugetStore";
+string nugetPath = "/home/tyfn/localNugetStore";
 string commonLibProjectPath = "../../CommonLib/src/";
 string signaleSentinelProjectPath = "../../SignalSentinel/src/";
 string binancProjectPath = "../../Exchanges/Binance/src/";
