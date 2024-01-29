@@ -54,13 +54,13 @@ public static class Packer
 }
 
 
-public static void Pack(string srcPath, string targetPath, Version version)
+public static void Pack(string srcPath, string nugetPath, Version version)
 {
-    CleanTarget(srcPath, targetPath);
+    CleanTarget(srcPath, nugetPath);
     string[] csProjFiles = Directory.GetFiles(srcPath, "*.csproj", SearchOption.AllDirectories);
     foreach (var csProjFile in csProjFiles)
     {
-        string command = $"dotnet pack {csProjFile} -o {targetPath} -p:Version={version}";
+        string command = $"dotnet pack {csProjFile} -o {nugetPath} -p:Version={version}";
         Process process = new();
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {

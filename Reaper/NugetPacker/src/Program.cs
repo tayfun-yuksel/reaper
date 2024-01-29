@@ -1,12 +1,41 @@
 ﻿
+using System.Runtime.InteropServices;
 using NugetPacker;
 
 Version version = new(1, 1, 242);
-string nugetPath = "/Users/taf/localNugetStore";
-string commonLibProjectPath = "../../CommonLib/src/";
-string signaleSentinelProjectPath = "../../SignalSentinel/src/";
-string binancProjectPath = "../../Exchanges/Binance/src/";
-string kucoinProjectPath = "../../Exchanges/Kucoin/src/";
+var getPath = (params string[] paths) =>
+{
+    DirectoryInfo currentDirectory = new(Directory.GetCurrentDirectory());
+
+    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            currentDirectory = currentDirectory.Parent!;
+        }
+    }
+    foreach (var path in paths)
+    {
+        if (path.Equals(".."))
+        {
+            currentDirectory = currentDirectory.Parent!;
+        }
+        else
+        {
+            currentDirectory = new (Path.Combine(currentDirectory.FullName, path));
+        }
+    }
+
+    return currentDirectory.FullName;
+};
+
+
+
+string nugetPath = getPath("..", "..", "localNugetStore");
+string commonLibProjectPath = getPath("..", "..", "CommonLib", "src");
+string signaleSentinelProjectPath = getPath("..", "..", "SignalSentinel", "src");
+string binancProjectPath = getPath("..", "..", "Exchanges", "Binance", "src");
+string kucoinProjectPath = getPath("..", "..", "Exchanges", "Kucoin", "src");
 
 Packer.Pack(commonLibProjectPath, nugetPath, version);
 Packer.Pack(signaleSentinelProjectPath, nugetPath, version);
