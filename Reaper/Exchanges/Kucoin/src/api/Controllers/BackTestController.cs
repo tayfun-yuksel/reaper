@@ -33,7 +33,15 @@ public class BackTestController(IBackTestService backTestService) : ControllerBa
             throw new ArgumentException("Interval must be one of the following: " 
                 + string.Join(", ", TimeExtensions.AllowedIntervalInMinutes));
         }
+	Console.WriteLine($"Symbol: {symbol.ToUpper()}");
+	Console.WriteLine($"startTime: {startTime}");
+	Console.WriteLine($"endTime: {endTime}");
+	Console.WriteLine($"interval in minutes: {interval}");
+	Console.WriteLine($"strategy: {strategy}");
+	Console.WriteLine($"tradeAmount: {tradeAmount}");
+	Console.WriteLine($"volumeFactor: {volumeFactor}");
         var finalAmount = await backTestService.BackTestAsync(symbol, startTime, endTime, interval, tradeAmount, strategy, volumeFactor, cancellationToken);
+	Console.WriteLine($"finalAmount: {finalAmount}");
         return Ok(finalAmount);
     }
 }
