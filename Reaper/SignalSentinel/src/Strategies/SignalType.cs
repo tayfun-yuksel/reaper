@@ -5,5 +5,7 @@ public enum SignalType
     Undefined,
     Buy,
     Sell,
-    Hold
+    Hold,
+    TakeProfit,
+    StopLoss,
 }

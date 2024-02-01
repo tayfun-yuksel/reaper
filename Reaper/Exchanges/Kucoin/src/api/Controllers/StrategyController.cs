@@ -6,9 +6,19 @@ namespace Reaper.Exchanges.Kucoin.Api;
 [Route("[controller]")]
 public class StrategyController(ITilsonService tilsonService) : ControllerBase
 {
-    [HttpGet(nameof(TilsonT3Async))]
-    public async Task TilsonT3Async(string symbol, decimal amount, int interval, CancellationToken cancellationToken)
+    [HttpGet("Tilson")]
+    public async Task TilsonT3Async(
+        string symbol,
+        decimal amount,
+        decimal profitPercentage,
+        int interval,
+        CancellationToken cancellationToken)
     {
-        await tilsonService.RunAsync(symbol, amount, interval, cancellationToken);
+        await tilsonService.RunAsync(
+            symbol,
+            amount,
+            profitPercentage,
+            interval,
+            cancellationToken);
     }
 }

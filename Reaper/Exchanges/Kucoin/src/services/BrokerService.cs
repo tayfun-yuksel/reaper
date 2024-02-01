@@ -2,6 +2,8 @@ using System.Dynamic;
 using Flurl.Http;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Polly;
+using Polly.Retry;
 using Reaper.CommonLib.Interfaces;
 using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.Exchanges.Kucoin.Services.Models;
@@ -9,13 +11,68 @@ using Reaper.Exchanges.Kucoin.Services.Models;
 namespace Reaper.Exchanges.Kucoin.Services;
 public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
     IMarketDataService marketDataService,
-    IPositionService positionService,
+    IPositionInfoService positionService,
     IOrderService orderService) : IBrokerService
 {
     private readonly KucoinOptions _kucoinOptions = kucoinOptions.Value;
+    
+    private readonly string OrderNotExistError_ = "error.getOrder.orderNotExist";
+
+    private static AsyncRetryPolicy<Result<string>> ErrorMessagePolicy => Policy
+        .HandleResult<Result<string>>(r =>
+        {
+            if (r.Error != null)
+            {
+                Utils.Print("Error while getting order details", r.Error.Message, ConsoleColor.Red);
+                return true;
+            }
+            dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(r.Data!);
+            var errorToCheck = "error.getOrder.orderNotExist";
+            return r.Data!.Contains(errorToCheck);
+        })
+        .WaitAndRetryAsync(
+            3,
+            retryAttempt => TimeSpan.FromSeconds(2),
+            onRetry: (outCome, timeSpan, retryCount, context) => 
+            {
+                Utils.Print("Retrying", $"after {timeSpan.Seconds} seconds due to: {outCome.Result.Data}", ConsoleColor.Yellow);
+                Utils.Print("RetryCount", retryCount.ToString(), ConsoleColor.Red);
+            });
 
 
-    internal async Task<Result<string>> PlaceMarketOrderAsync(string side, string symbol, decimal amount, CancellationToken cancellationToken)
+
+
+    internal async Task<Result<decimal>> GetFilledValueAsync(string orderId, CancellationToken cancellationToken)
+    {
+        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.FuturesBaseUrl, true);
+
+        var getOrderDetailsFn = async (IFlurlClient client, object? requestData, CancellationToken cancellationToken) =>
+            await client.Request()
+                .AppendPathSegments("api", "v1", "orders", orderId)
+                .WithSignatureHeaders(_kucoinOptions, "GET")
+                .GetAsync()
+                .ReceiveString();
+
+        Result<string> result = await getOrderDetailsFn.CallAsync(flurlClient, null, cancellationToken);
+
+        if (result.Error != null)
+        {
+            Utils.Print("Error while getting order details", result.Error!.Message, ConsoleColor.Red);
+        }
+        else if (!result.Data!.Contains("data"))
+        {
+            Utils.Print("Error while getting order details", result.Data!, ConsoleColor.Red);
+        }
+
+        dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
+        var filledValue = decimal.Parse(response.data.filledValue);
+        return filledValue;
+    }
+
+
+
+
+    internal async Task<Result<decimal>> PlaceMarketOrderAsync(string side, string symbol, decimal amount, CancellationToken cancellationToken)
     {
         var marketPrice = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
         var quantity = amount / marketPrice;
@@ -39,7 +96,17 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
             type = "market"
         }, cancellationToken);
 
-        return result;
+        if (result.Error != null)
+        {
+            Utils.Print("Error placing market order", result.Error.Message, ConsoleColor.Red);
+        }
+        Utils.Print($"Placed market order:", result.Data!, ConsoleColor.Green);
+        dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
+        string orderId = response.data.orderId;
+
+        var filledValue = await GetFilledValueAsync(orderId, cancellationToken);
+        Utils.Print("Order details:", filledValue.ToString(), ConsoleColor.Green);
+        return filledValue;
     }
 
 
@@ -67,8 +134,10 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
 
     internal async Task<decimal> GetDifferenceAsync(string position, string symbol, decimal amount, CancellationToken cancellationToken)
     {
-        var positionAmount = await positionService.GetPositionAmountAsync(symbol, cancellationToken);
+        var (positionAmount, _) = await positionService.GetPositionInfoAsync(symbol, cancellationToken);
         var difference =  amount - positionAmount ;
+        Utils.Print("Amount at position:", positionAmount.ToString(), ConsoleColor.Green);
+        Utils.Print("Difference:", difference.ToString(), ConsoleColor.Green);
         return difference;
     }
 
@@ -83,21 +152,20 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
 
     public async Task<string> BuyMarketAsync(string symbol, decimal amount, CancellationToken cancellationToken)
     {
-        var lastOrder = await PlaceMarketOrderAsync("buy", symbol, amount, cancellationToken);
-        if (lastOrder.Error != null)
+        var filledvalue = await PlaceMarketOrderAsync("buy", symbol, amount, cancellationToken);
+        if (filledvalue.Error != null)
         {
             throw new InvalidOperationException("Error placing market order");
         }
 
         await WaitUntilActiveOrdersAreFilledAsync(symbol, cancellationToken);
-        var difference = await GetDifferenceAsync("long", symbol, amount, cancellationToken);
+        var difference = amount - filledvalue.Data!;
 
         if (difference >= 1)
         {
             await BuyMarketAsync(symbol, difference, cancellationToken);
         }
-
-        return lastOrder.Data!;
+        return "done";//todo: return something meaningful
     }
 
 
@@ -109,24 +177,22 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
 
 
 
-
     public async Task<string> SellMarketAsync(string symbol, decimal amount, CancellationToken cancellationToken)
     {
-        var lastOrder = await PlaceMarketOrderAsync("sell", symbol, amount, cancellationToken);
-        if (lastOrder.Error != null)
+        var filledValue = await PlaceMarketOrderAsync("sell", symbol, amount, cancellationToken);
+        if (filledValue.Error != null)
         {
             throw new InvalidOperationException("Error placing market order");
         }
 
         await WaitUntilActiveOrdersAreFilledAsync(symbol, cancellationToken);
-        var difference = await GetDifferenceAsync("short", symbol, amount, cancellationToken);
+        var difference = amount - filledValue.Data!;
 
         if (difference >= 1)
         {
             await SellMarketAsync(symbol, difference, cancellationToken);
         }
-
-        return lastOrder.Data!;
+        return "done";//todo: return something meaningful
     }
 
 

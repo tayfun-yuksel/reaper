@@ -1,0 +1,3 @@
+bollinger bands => calculate volatility give potential pairs to trade
+macd => calculate spot orders only strong bullish signals
+tilson => futures trading, design a take profit strategy

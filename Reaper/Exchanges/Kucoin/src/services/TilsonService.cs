@@ -5,59 +5,106 @@ using Reaper.SignalSentinel.Strategies;
 namespace Reaper.Exchanges.Kucoin.Services;
 public class TilsonService(IMarketDataService marketDataService,
     IBrokerService brokerService,
-    IPositionService positionService) : ITilsonService
+    IPositionInfoService positionService,
+    IFuturesHub futuresHub) : ITilsonService
 {
-    public async Task RunAsync(string symbol, decimal amount, int interval, CancellationToken cancellationToken)
+    internal async Task<SignalType> GetBuyOrSellSignalAsync(
+            SignalType side,
+            string symbol,
+            int interval,
+            CancellationToken cancellationToken)
     {
-        var signalType = SignalType.Undefined;
-        var buyOrSellFn = async(string symbol, decimal amount, int interval, CancellationToken cancellationToken) =>
+        var startTime = DateTime.UtcNow.AddMinutes(-(interval * 50)).ToString("dd-MM-yyyy HH:mm");
+        var endTime = DateTime.UtcNow.ToString("dd-MM-yyyy HH:mm");
+        var last8Prices = await marketDataService.GetKlinesAsync(symbol, startTime, endTime, interval, cancellationToken);
+        var t3Values = TilsonT3.CalculateT3([.. last8Prices], period: 6, volumeFactor: 0.5m);
+
+        var t3Last = t3Values.Last();
+        var originLast = last8Prices.Last();
+
+        if (side != SignalType.Buy && t3Last > originLast)
         {
-            var startTime = DateTime.UtcNow.AddMinutes(-(interval * 50)).ToString("dd-MM-yyyy HH:mm");
-            var endTime = DateTime.UtcNow.ToString("dd-MM-yyyy HH:mm");
-            var last8Prices = await marketDataService.GetKlinesAsync(symbol, startTime, endTime, interval, cancellationToken);
-            var t3Values = TilsonT3.CalculateT3([.. last8Prices], period: 6, volumeFactor: 0.314m);
+            return SignalType.Buy;
+        }
+        else if (side != SignalType.Sell && t3Last < originLast)
+        {
+            return SignalType.Sell;
+        }
+        Console.WriteLine($"Holding {symbol} at {DateTime.UtcNow}");
+        return SignalType.Hold;
+    }
 
-            var t3Last = t3Values.Last();
-            var originLast = last8Prices.Last();
 
-            if (signalType != SignalType.Buy && t3Last > originLast)
-            {
-                //close sell position
-                if (signalType == SignalType.Sell)
-                {
-                    Console.WriteLine("closing position");
-                    await brokerService.BuyMarketAsync(symbol, amount, cancellationToken);
-                }
 
-                Console.WriteLine($"Long position {symbol} at {DateTime.UtcNow}");
-                await brokerService.BuyMarketAsync(symbol, amount, cancellationToken);
-                signalType = SignalType.Buy;
-            }
-            else if (signalType != SignalType.Sell && t3Last < originLast)
-            {
-                //close buy position
-                if (signalType == SignalType.Buy)
-                {
-                    Console.WriteLine("closing long position");
-                    await brokerService.SellMarketAsync(symbol, amount, cancellationToken);
-                }
 
-                Console.WriteLine($"Short position {symbol} at {DateTime.UtcNow}");
-                await brokerService.SellMarketAsync(symbol, amount, cancellationToken);
-                signalType = SignalType.Sell;
-            }
-            else
-            {
-                Console.WriteLine($"Holding {symbol} at {DateTime.UtcNow}");
-            }
-            return signalType;
+    public async Task RunAsync(
+        string symbol,
+        decimal amount,
+        decimal profitPercentage,
+        int interval,
+        CancellationToken cancellationToken)
+    {
+        TimeSpan profitTimeOut = TimeSpan.FromMinutes(interval);
+
+
+        var buyOrSellFn = async (SignalType side, decimal posAmount) => {
+            if (side == SignalType.Buy)
+                await brokerService.SellMarketAsync(symbol, posAmount, cancellationToken);
+            else if (side == SignalType.Sell)
+                await brokerService.BuyMarketAsync(symbol, posAmount, cancellationToken);
         };
+        
+        var getCloseSignalFn = (SignalType side) =>
+        {
+            if (side == SignalType.Buy)
+            {
+                return SignalType.Sell;
+            }
+            else if (side == SignalType.Sell)
+            {
+                return SignalType.Buy;
+            }
+            return side;
+        };
+
+        var positionSignal = await GetBuyOrSellSignalAsync(
+            SignalType.Undefined,
+            symbol,
+            interval,
+            cancellationToken);
+
+        await buyOrSellFn(positionSignal, amount);
 
         while (cancellationToken.IsCancellationRequested == false)
         {
-            signalType = await buyOrSellFn(symbol, amount, interval, cancellationToken);
-            await Task.Delay(TimeSpan.FromMinutes(interval), cancellationToken);
-            amount = await positionService.GetPositionAmountAsync(symbol, cancellationToken);
+            //update amount info based on current market data
+            (amount, _) = await positionService.GetPositionInfoAsync(symbol, cancellationToken);
+            var targetProfit = amount * profitPercentage;
+            var (takeProfit, realizedPnl) = await futuresHub.WatchTargetProfitAsync(targetProfit, profitTimeOut, symbol);
+
+            if (takeProfit)
+            {
+                Console.WriteLine($"Realized Pnl: {realizedPnl}");
+                Console.WriteLine("Taking profit....");
+                await buyOrSellFn(getCloseSignalFn(positionSignal), realizedPnl);
+            }
+
+            positionSignal = await GetBuyOrSellSignalAsync(
+                positionSignal,
+                symbol,
+                interval,
+                cancellationToken);
+
+            if (positionSignal == SignalType.Hold)
+            {
+                Console.WriteLine($"Holding {symbol} at {DateTime.UtcNow}");
+                continue;
+            }
+
+            //close position 
+            await buyOrSellFn(getCloseSignalFn(positionSignal), amount);
+            //open position
+            await buyOrSellFn(positionSignal, amount);
         }
     }
 }

@@ -5,14 +5,15 @@ using Newtonsoft.Json;
 using Reaper.CommonLib.Interfaces;
 using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.Exchanges.Kucoin.Services.Models;
+using Reaper.SignalSentinel.Strategies;
 
 namespace Reaper.Exchanges.Kucoin.Services;
-public class PositionService(IOptions<KucoinOptions> options, 
-    IMarketDataService marketDataService) : IPositionService
+public class PositionInfoService(IOptions<KucoinOptions> options, 
+    IMarketDataService marketDataService) : IPositionInfoService
 {
     private readonly KucoinOptions _kucoinOptions = options.Value;
 
-    public async Task<decimal> GetPositionAmountAsync(string symbol, CancellationToken cancellationToken)
+    public async Task<(decimal amount, SignalType position)> GetPositionInfoAsync(string symbol, CancellationToken cancellationToken)
     {
         using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.FuturesBaseUrl, true);
         var getPositionFn = async (IFlurlClient client, object? requestData, CancellationToken cancellation) =>
@@ -34,7 +35,8 @@ public class PositionService(IOptions<KucoinOptions> options,
         }
         dynamic positionDetails = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
         var positionAmount = Math.Abs((decimal)positionDetails.data.markValue) + (decimal)positionDetails.data.realisedPnl;
-        return positionAmount;
+        SignalType position = positionDetails.data.currentQty > 0 ? SignalType.Buy : SignalType.Sell;
+        return (positionAmount, position);
     }
 
 }
