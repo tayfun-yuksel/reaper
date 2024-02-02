@@ -12,7 +12,7 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
     private readonly KucoinOptions _kucoinOptions = options.Value;
 
 
-    public async Task<decimal> GetSymbolPriceAsync(string symbol, CancellationToken cancellationToken)
+    public async Task<Result<decimal>> GetSymbolPriceAsync(string symbol, CancellationToken cancellationToken)
     {
         using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.FuturesBaseUrl, true);
 
@@ -23,24 +23,25 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
                 .GetAsync(HttpCompletionOption.ResponseContentRead, cancellationToken)
                 .ReceiveString();
 
-        Result<string> result = await getSymbolPriceFn.CallAsync(flurlClient, new
-        {
-            symbol = symbol.ToUpper()
-        }, cancellationToken);
+        Result<string> result = await getSymbolPriceFn.CallAsync(
+            flurlClient,
+            new { symbol = symbol.ToUpper() },
+            cancellationToken);
 
         if (result.Error != null)
         {
-            return 0;
+            return new(){ Error = result.Error };
         }
 
         dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
         decimal markPrice = (decimal)response.data.indexPrice;
-        return markPrice;
+
+        return new(){ Data = markPrice };
     }
 
 
 
-    public async Task<IEnumerable<decimal>> GetKlinesAsync(string symbol,
+    public async Task<Result<IEnumerable<decimal>>> GetKlinesAsync(string symbol,
         string startTime,
         string? endTime,
         int interval,
@@ -65,15 +66,13 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
 
         if (result.Error != null)
         {
-            Console.WriteLine($"Error: {result.Error.Message}");
-            return [];
+            return new(){ Error = result.Error }; 
         }
-
         var klines = result.Data!.ToFuturesKlineArray().Data;
         var prices = klines!
             .Select(x => x.ClosePrice)
             .ToList() as IEnumerable<decimal>;
 
-        return prices!;
+        return new(){ Data = prices };
     }
 }

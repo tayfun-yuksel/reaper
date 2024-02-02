@@ -3,12 +3,9 @@ using System.Net.WebSockets;
 using Flurl.Http;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
-using Polly;
-using Polly.Retry;
 using Reaper.CommonLib.Interfaces;
 using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.Exchanges.Kucoin.Services.Models;
-using Reaper.SignalSentinel.Strategies;
 
 namespace Reaper.Exchanges.Kucoin.Services;
 public class FuturesHub(IOptions<KucoinOptions> options) : IFuturesHub
@@ -16,36 +13,24 @@ public class FuturesHub(IOptions<KucoinOptions> options) : IFuturesHub
     private readonly KucoinOptions _kucoinOptions = options.Value;
     private readonly ClientWebSocket webSocket = new();
 
-    private static AsyncRetryPolicy WebSocketRetryPolicy => Policy
-        .Handle<WebSocketException>()
-        .WaitAndRetryAsync(
-            3,
-            retryAttempt => TimeSpan.FromSeconds(2),
-            (exception, timeSpan, retryCount, context) => 
-            {
-                Console.WriteLine($"Retrying after {timeSpan.Seconds}");
-                Console.WriteLine($"seconds due to: {exception.Message}");
-                Console.WriteLine($"RetryCount: {retryCount}");
-            });
-
-
-
     private async Task<(string endpoint, string token)> GetFuturesDynamicWebSocketUrl()
     {
         using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.FuturesBaseUrl, true);
 
-        var getPublicEndpointsFn = async (IFlurlClient client, object? requestData, CancellationToken cancellationToken) =>
-            await client.Request()
+        var getPublicEndpointsFn = async () =>
+            await flurlClient.Request()
                 .AppendPathSegments("api", "v1", "bullet-private")
                 .WithSignatureHeaders(_kucoinOptions, "POST")
                 .PostAsync()
                 .ReceiveString();
 
-        Result<string> result = await getPublicEndpointsFn.CallAsync(flurlClient, null, CancellationToken.None);
+        Result<string> result = await getPublicEndpointsFn
+            .WithPolicy(RetryPolicies.HttpErrorLogAndRetryPolicy)
+            .WrapErrorAsync();
 
         if (result.Error != null)
         {
-            throw new Exception(result.Error.Message);
+            throw result.Error;
         }
 
         dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
@@ -76,63 +61,43 @@ public class FuturesHub(IOptions<KucoinOptions> options) : IFuturesHub
 
 
 
-    public async Task<(bool takeProfit, decimal profit)> WatchTargetProfitAsync(decimal targetPnl, TimeSpan watchTime, string symbol)
-    {
-        var watchForProfitFn = async () => 
+    public Func<decimal, TimeSpan, string, Task<(bool takeProfit, decimal profit)>> WatchTargetProfitAsync =>
+        async(decimal targetPnl, TimeSpan watchTime, string symbol) =>
         {
-            await SubscribeToMarketDataAsync(symbol);
-            using var cts = new CancellationTokenSource(watchTime);
+                await SubscribeToMarketDataAsync(symbol);
+                using var cts = new CancellationTokenSource(watchTime);
 
-            while (webSocket.State == WebSocketState.Open && !cts.IsCancellationRequested)
-            {
-                var buffer = new byte[1024 * 4];
-                WebSocketReceiveResult result = 
-                    await webSocket.ReceiveAsync(buffer, cts.Token);
-
-                if (result.MessageType == WebSocketMessageType.Text)
+                while (webSocket.State == WebSocketState.Open && !cts.IsCancellationRequested)
                 {
-                    string response = System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    Utils.Print(
-                        $"WatchProfit received message: ",
-                        response,
-                        ConsoleColor.Green);
-                    dynamic marketData = JsonConvert.DeserializeObject<ExpandoObject>(response);
+                    var buffer = new byte[1024 * 4];
+                    WebSocketReceiveResult result = 
+                        await webSocket.ReceiveAsync(buffer, cts.Token);
 
-                    if (marketData.type != "message" || marketData.subject != "position.change")
+                    if (result.MessageType == WebSocketMessageType.Text)
                     {
+                        string response = System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count);
                         Utils.Print(
-                            $"Received message is not a position change",
+                            $"WatchProfit received message: ",
                             response,
-                            ConsoleColor.Red);
-                        continue;
-                    }
+                            ConsoleColor.Green);
+                        dynamic marketData = JsonConvert.DeserializeObject<ExpandoObject>(response);
 
-                    var realisedPnl = (decimal)marketData.data.realisedPnl;
-                    if (realisedPnl >= targetPnl)
-                    {
-                        return (true, realisedPnl);
+                        if (marketData.type != "message" || marketData.subject != "position.change")
+                        {
+                            Utils.Print(
+                                $"Received message is not a position change",
+                                response,
+                                ConsoleColor.Red);
+                            continue;
+                        }
+
+                        var realisedPnl = (decimal)marketData.data.realisedPnl;
+                        if (realisedPnl >= targetPnl)
+                        {
+                            return (true, realisedPnl);
+                        }
                     }
-                }
-            } 
-            return (false, 0m);
+                } 
+                return (false, 0m);
         };
-
-
-        var response = await watchForProfitFn
-            .WithPolicy(WebSocketRetryPolicy)
-            .WithErrorLogging();
-
-        if (response.Error != null)
-        {
-            if (response.Error is OperationCanceledException)
-            {
-                Console.WriteLine("Watch time ended. Operation cancelled......");
-            }
-            return (false, 0m);
-        }
-
-        return response.Data;
-    }
-
-
 }

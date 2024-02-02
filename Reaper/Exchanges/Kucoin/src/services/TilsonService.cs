@@ -46,7 +46,6 @@ public class TilsonService(IMarketDataService marketDataService,
     {
         TimeSpan profitTimeOut = TimeSpan.FromMinutes(interval);
 
-
         var buyOrSellFn = async (SignalType side, decimal posAmount) => {
             if (side == SignalType.Buy)
                 await brokerService.SellMarketAsync(symbol, posAmount, cancellationToken);
@@ -54,6 +53,7 @@ public class TilsonService(IMarketDataService marketDataService,
                 await brokerService.BuyMarketAsync(symbol, posAmount, cancellationToken);
         };
         
+
         var getCloseSignalFn = (SignalType side) =>
         {
             if (side == SignalType.Buy)
@@ -66,6 +66,7 @@ public class TilsonService(IMarketDataService marketDataService,
             }
             return side;
         };
+
 
         var positionSignal = await GetBuyOrSellSignalAsync(
             SignalType.Undefined,
