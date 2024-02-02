@@ -8,8 +8,7 @@ using Reaper.Exchanges.Kucoin.Services.Models;
 using Reaper.SignalSentinel.Strategies;
 
 namespace Reaper.Exchanges.Kucoin.Services;
-public class PositionInfoService(IOptions<KucoinOptions> options, 
-    IMarketDataService marketDataService) : IPositionInfoService
+public class PositionInfoService(IOptions<KucoinOptions> options) : IPositionInfoService
 {
     private readonly KucoinOptions _kucoinOptions = options.Value;
 

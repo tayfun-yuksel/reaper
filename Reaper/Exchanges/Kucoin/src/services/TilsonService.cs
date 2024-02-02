@@ -16,11 +16,17 @@ public class TilsonService(IMarketDataService marketDataService,
     {
         var startTime = DateTime.UtcNow.AddMinutes(-(interval * 50)).ToString("dd-MM-yyyy HH:mm");
         var endTime = DateTime.UtcNow.ToString("dd-MM-yyyy HH:mm");
-        var last8Prices = await marketDataService.GetKlinesAsync(symbol, startTime, endTime, interval, cancellationToken);
-        var t3Values = TilsonT3.CalculateT3([.. last8Prices], period: 6, volumeFactor: 0.5m);
+        var pricesResult = await marketDataService.GetKlinesAsync(symbol, startTime, endTime, interval, cancellationToken);
+
+        if (pricesResult.Error != null)
+        {
+            throw new InvalidOperationException("Error getting klines", pricesResult.Error);
+        }
+
+        var t3Values = TilsonT3.CalculateT3([.. pricesResult.Data], period: 6, volumeFactor: 0.5m);
 
         var t3Last = t3Values.Last();
-        var originLast = last8Prices.Last();
+        var originLast = pricesResult.Data!.Last();
 
         if (side != SignalType.Buy && t3Last > originLast)
         {

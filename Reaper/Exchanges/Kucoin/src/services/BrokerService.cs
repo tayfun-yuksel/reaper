@@ -11,7 +11,6 @@ using Reaper.Exchanges.Kucoin.Services.Models;
 namespace Reaper.Exchanges.Kucoin.Services;
 public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
     IMarketDataService marketDataService,
-    IPositionInfoService positionService,
     IOrderService orderService) : IBrokerService
 {
     private readonly KucoinOptions _kucoinOptions = kucoinOptions.Value;
@@ -146,10 +145,12 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
     };
 
 
-    public Task<bool> BuyLimitAsync(string symbol, decimal quantity, decimal price, CancellationToken cancellationToken)
+
+    public Task<Result<string>> BuyLimitAsync(string symbol, decimal quantity, decimal price, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
+
 
 
     public async Task<Result<string>> BuyMarketAsync(string symbol, decimal amount, CancellationToken cancellationToken)
@@ -170,16 +171,12 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
         return new() { Data = "done" };
     }
 
-
-
-    public Task<bool> SellLimitAsync(string symbol, decimal quantity, decimal price, CancellationToken cancellationToken)
+    public Task<Result<string>> SellLimitAsync(string symbol, decimal quantity, decimal price, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
 
-
-
-    public async Task<string> SellMarketAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+    public async Task<Result<string>> SellMarketAsync(string symbol, decimal amount, CancellationToken cancellationToken)
     {
         var filledValue = await PlaceMarketOrderAsync("sell", symbol, amount, cancellationToken);
         if (filledValue.Error != null)
@@ -194,7 +191,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
         {
             await SellMarketAsync(symbol, difference, cancellationToken);
         }
-        return "done";//todo: return something meaningful
+        return new() { Data = "done" };
     }
 
 

@@ -40,12 +40,17 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
         var (from, to) = getFromAndToTimeFn(startTime, interval);
         while (true)
         {
-            var klines = await marketDataService.GetKlinesAsync(symbol, from, to, interval, cancellationToken);
+            var klinesResult = await marketDataService.GetKlinesAsync(symbol, from, to, interval, cancellationToken);
+            if (klinesResult.Error != null)
+            {
+                throw new InvalidOperationException("Error getting klines", klinesResult.Error);
+            }
+
             from = to;
             (from, to) = getFromAndToTimeFn(from, interval);
 
-            prices.AddRange(klines);
-            if (!klines.Any())
+            prices.AddRange(klinesResult.Data!);
+            if (!klinesResult.Data!.Any())
             {
                 break;
             }

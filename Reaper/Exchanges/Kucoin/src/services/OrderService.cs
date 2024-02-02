@@ -24,7 +24,7 @@ public class OrderService(IOptions<KucoinOptions> kucoinOptions) : IOrderService
         return result;
     }
 
-    public Task<IEnumerable<TOrder>> GetOrdersBySymbolAsync<TOrder>(string symbol, DateTime from, DateTime to)
+    public Task<Result<IEnumerable<TOrder>>> GetOrdersBySymbolAsync<TOrder>(string symbol, DateTime from, DateTime to)
         where TOrder : class
     {
         throw new NotImplementedException();
