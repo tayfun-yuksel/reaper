@@ -107,9 +107,9 @@ public class TilsonService(IMarketDataService marketDataService,
     {
         TimeSpan profitTimeOut = TimeSpan.FromMinutes(interval);
         SignalType currentAction = SignalType.Undefined;
-        var positionDetail = async() => 
+        var positionDetail = async(SignalType currentPosition) => 
         {
-            if (currentAction == SignalType.Undefined)
+            if (currentPosition == SignalType.Undefined)
             {
                 return (tradeAmount: amount, enterPrice: 0);
             }
@@ -134,14 +134,14 @@ public class TilsonService(IMarketDataService marketDataService,
                 await TryBuyOrSellAsync(
                     symbol,
                     actionToTake,
-                    (await positionDetail()).tradeAmount,
+                    (await positionDetail(currentAction)).tradeAmount,
                     cancellationToken);
                 
             }
             //open position
             await TryBuyOrSellAsync(symbol,
                 actionToTake, 
-                (await positionDetail()).tradeAmount,
+                (await positionDetail(currentAction)).tradeAmount,
                 cancellationToken);
 
             if (actionToTake == SignalType.Buy || actionToTake == SignalType.Sell)
@@ -162,7 +162,7 @@ public class TilsonService(IMarketDataService marketDataService,
                 await Task.Delay(30 * 1000, cancellationToken);
                 var profit = await WatchTargetProfitAsync(
                                     symbol,
-                                    (await positionDetail()).enterPrice,
+                                    (await positionDetail(currentAction)).enterPrice,
                                     profitPercentage,
                                     cancellationToken);
 
@@ -175,7 +175,7 @@ public class TilsonService(IMarketDataService marketDataService,
                 var (takeProfit, profitPercent) = profit.Data!;
                 if (takeProfit)
                 {
-                    var profitAmount = (await positionDetail()).tradeAmount * profitPercent;
+                    var profitAmount = (await positionDetail(currentAction)).tradeAmount * profitPercent;
                     RLogger.AppLog.Information($"REALISED PNL: {profitPercent}");
                     RLogger.AppLog.Information("TAKING PROFIT....");
                     RLogger.AppLog.Information($"PROFIT AMOUNT: {profitAmount}");
