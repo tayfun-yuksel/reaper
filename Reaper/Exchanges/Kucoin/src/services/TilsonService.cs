@@ -161,7 +161,7 @@ public class TilsonService(IMarketDataService marketDataService,
 
             while (timeOutCTS.IsCancellationRequested == false)
             {
-                await Task.Delay(30 * 1000, cancellationToken);
+                await Task.Delay(5 * 1000, cancellationToken);
                 var profit = await WatchTargetProfitAsync(
                                     symbol,
                                     (await positionDetail(currentAction)).enterPrice,
