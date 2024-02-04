@@ -54,7 +54,6 @@ public class FuturesHub(IOptions<KucoinOptions> options,
 
             string messageJson = JsonConvert.SerializeObject(new
             {
-                privateChannel = true,
                 type = "subscribe",
                 topic = $"/contract/instrument:{symbol.ToUpper()}", 
             });
@@ -127,10 +126,10 @@ public class FuturesHub(IOptions<KucoinOptions> options,
 
                 var markPrice = (decimal)marketData.data.markPrice;
                 var currentProfitPercent = (markPrice - entryPrice) / entryPrice; 
-
+                RLogger.AppLog.Information($"currentProfitPercent: {currentProfitPercent}");
                 if (currentProfitPercent >= targetPnlPercent)
                 {
-                    RLogger.AppLog.Information("PROFIT TARGET REACHED.........WS");
+                    RLogger.AppLog.Information($"PROFIT TARGET REACHED.........WS {symbol}: {currentProfitPercent}");
                     return new() { Data = (true, currentProfitPercent) };
                 }
             }
