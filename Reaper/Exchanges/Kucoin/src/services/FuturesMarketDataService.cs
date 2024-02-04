@@ -14,19 +14,18 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
 
     public async Task<Result<decimal>> GetSymbolPriceAsync(string symbol, CancellationToken cancellationToken)
     {
-        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.FuturesBaseUrl, true);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, true);
 
-        var getSymbolPriceFn = async (IFlurlClient client, object? requestData, CancellationToken cancellationToken) =>
-            await client.Request()
-                .AppendPathSegments("api", "v1", "contracts", symbol)
+        var getSymbolPriceFn = async () => await flurlClient.Request()
+                .AppendPathSegments("api", "v1", "contracts", symbol.ToUpper())
                 .WithSignatureHeaders(_kucoinOptions, "GET") 
                 .GetAsync(HttpCompletionOption.ResponseContentRead, cancellationToken)
                 .ReceiveString();
 
-        Result<string> result = await getSymbolPriceFn.CallAsync(
-            flurlClient,
-            new { symbol = symbol.ToUpper() },
-            cancellationToken);
+        Result<string> result = await getSymbolPriceFn
+            .WithErrorPolicy(RetryPolicies.HttpErrorLogAndRetryPolicy)
+            .CallAsync();
+
 
         if (result.Error != null)
         {
@@ -47,22 +46,29 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
         int interval,
         CancellationToken cancellationToken)
     {
-        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.FuturesBaseUrl, true);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions
+            .GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, true);
 
-        var klinesFn = async (IFlurlClient client, object? requestData, CancellationToken cancellation) =>
-            await client.Request()
-                .AppendPathSegments("api", "v1", "kline", "query")
-                .SetQueryParams(requestData)
-                .GetAsync(HttpCompletionOption.ResponseContentRead, cancellation)
-                .ReceiveString();
-
-        Result<string> result = await klinesFn.CallAsync(flurlClient, new
+        var fromResult = startTime.ToUtcEpochMs();
+        var toResult = endTime?.ToUtcEpochMs();
+        //todo: handle error
+        var queryParams = new
         {
             symbol = symbol.ToUpper(),
             granularity = interval,
-            from = startTime.ToUtcEpochMs(),
-            to = endTime?.ToUtcEpochMs()
-        }, cancellationToken);
+            from = fromResult.Data!,
+            to = toResult?.Data
+        };
+
+        var klinesFn = async () => await flurlClient.Request()
+                .AppendPathSegments("api", "v1", "kline", "query")
+                .SetQueryParams(queryParams)
+                .GetAsync(HttpCompletionOption.ResponseContentRead, cancellationToken)
+                .ReceiveString();
+
+        Result<string> result = await klinesFn
+            .WithErrorPolicy(RetryPolicies.HttpErrorLogAndRetryPolicy)
+            .CallAsync();
 
         if (result.Error != null)
         {

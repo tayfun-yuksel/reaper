@@ -1,7 +1,10 @@
+using System.Dynamic;
 using System.Net.WebSockets;
 using Flurl.Http;
+using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
+using Serilog;
 
 namespace Reaper.Exchanges.Kucoin.Services;
 public static class RetryPolicies
@@ -13,9 +16,8 @@ public static class RetryPolicies
             retryAttempt => TimeSpan.FromSeconds(2),
             (exception, timeSpan, retryCount, context) => 
             {
-                Console.WriteLine($"Retrying after {timeSpan.Seconds}");
-                Console.WriteLine($"seconds due to: {exception.Message}");
-                Console.WriteLine($"RetryCount: {retryCount}");
+                RLogger.AppLog.Error($"Retrying after {timeSpan.Seconds} seconds due to: {exception.Message}");
+                RLogger.AppLog.Error($"RetryCount: {retryCount}");
             });
 
 
@@ -26,8 +28,22 @@ public static class RetryPolicies
             retryAttempt => TimeSpan.FromSeconds(2),
             (exception, timeSpan, retryCount, context) => 
             {
-                Console.WriteLine($"Retrying after {timeSpan.Seconds}");
-                Console.WriteLine($"seconds due to: {exception.Message}");
-                Console.WriteLine($"RetryCount: {retryCount}");
+                RLogger.AppLog.Error($"Retrying after {timeSpan.Seconds} seconds due to: {exception.Message}");
+                RLogger.AppLog.Error($"RetryCount: {retryCount}");
             });
+
+    public static AsyncRetryPolicy<string> GetErrorMessageHandlePolicy(string errorMsg) => Policy
+        .HandleResult<string>(responseStr =>
+        {
+            return responseStr.Contains(errorMsg);
+        })
+        .WaitAndRetryAsync(
+            3,
+            retryAttempt => TimeSpan.FromSeconds(2),
+            onRetry: (outCome, timeSpan, retryCount, context) => 
+            {
+                RLogger.AppLog.Error($"Retrying after {timeSpan.Seconds} seconds due to: {errorMsg}", timeSpan.Seconds, errorMsg);
+                RLogger.AppLog.Error("RetryCount: {retryCount}", retryCount);
+            });
+
 }

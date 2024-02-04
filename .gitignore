@@ -4,6 +4,9 @@
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 #tafss files
 
+#app logs
+Reaper/Exchanges/Kucoin/src/api/logs**
+
 prompt.txt
 trash/
 secret/

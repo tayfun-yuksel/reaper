@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using NugetPacker;
 
-Version version = new(1, 1, 248);
+Version version = new(1, 1, 252);
 var getPath = (params string[] paths) =>
 {
     DirectoryInfo currentDirectory = new(Directory.GetCurrentDirectory());

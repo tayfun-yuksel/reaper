@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using Flurl.Http;
-using Reaper.CommonLib.Interfaces;
 using Reaper.Exchanges.Kucoin.Services.Models;
 
 namespace Reaper.Exchanges.Kucoin.Services;
@@ -41,28 +40,6 @@ public static class FlurlExtensions
             .WithHeader("KC-API-TIMESTAMP", timestamp)
             .WithHeader("KC-API-PASSPHRASE", passphraseSignature)
             .WithHeader("KC-API-KEY-VERSION", "2");
-    }
-
-     public static async Task<Result<TResponse>> CallAsync<TResponse>(
-        this Func<IFlurlClient, object?, CancellationToken, Task<TResponse>> flurlCall,
-        IFlurlClient client,
-        object? data,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var response = await flurlCall(client, data, cancellationToken);
-            return new() { Data = response };
-        }
-        catch (FlurlHttpException ex)
-        {
-            return new() { Error = ex };
-        }
-        catch (Exception ex)
-        {
-            return new() { Error = ex };
-        }
-        
     }
 
 }
