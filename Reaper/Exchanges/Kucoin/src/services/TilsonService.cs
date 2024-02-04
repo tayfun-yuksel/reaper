@@ -127,9 +127,11 @@ public class TilsonService(IMarketDataService marketDataService,
                 cancellationToken);
 
             //close position before target action, if in position
-            if (currentAction == SignalType.Buy || currentAction == SignalType.Sell)
+            if ((currentAction == SignalType.Buy || currentAction == SignalType.Sell)
+                && actionToTake != SignalType.Hold )
             {
                 RLogger.AppLog.Information($"CLOSING {currentAction} POSITION....");
+                RLogger.AppLog.Information($"BEFORE: {actionToTake}....");
 
                 await TryBuyOrSellAsync(
                     symbol,
