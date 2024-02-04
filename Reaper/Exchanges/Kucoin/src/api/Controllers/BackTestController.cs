@@ -6,6 +6,13 @@ namespace Reaper.Exchanges.Binance.Api;
 [Route("[controller]")]
 public class BackTestController(IBackTestService backTestService) : ControllerBase
 {
+
+    [HttpGet(nameof(Foo))]
+    public async Task<IActionResult> Foo()
+    {
+	    return Ok("aloha from back-test...................");
+    }
+
     /// <summary>
     /// 
     /// </summary>
@@ -27,6 +34,9 @@ public class BackTestController(IBackTestService backTestService) : ControllerBa
         decimal volumeFactor,
         CancellationToken cancellationToken)
     {
+	RLogger.AppLog.Information($"Received request for tilson-t3 backtest for:");
+       	RLogger.AppLog.Information($"{symbol} from {startTime} to {endTime} with interval {interval} and trade amount {tradeAmount}");
+
         if (!TimeExtensions.AllowedIntervalInMinutes.Contains(interval))
         {
             throw new ArgumentException("Interval must be one of the following: " 

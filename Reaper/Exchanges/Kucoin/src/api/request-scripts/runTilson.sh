@@ -1,3 +1,3 @@
 curl -X 'GET' \
-  'http://localhost:5177/Strategy/TilsonT3Async?symbol=xaiusdtm&amount=94&interval=5' \
+  'http://localhost:5177/Strategy/Tilson?symbol=dmailusdtm&amount=70&profitPercentage=0.02&interval=1' \
   -H 'accept: */*'

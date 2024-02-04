@@ -20,6 +20,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSignalR();
 
 var app = builder.Build();
+Reaper.Exchanges.Kucoin.Services.RLogger.AppLog.Information("APP STARTED...............");
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
