@@ -120,7 +120,7 @@ public class TilsonService(IMarketDataService marketDataService,
     public async Task RunAsync(
         string symbol,
         decimal amount,
-        decimal targetProfitPercent,
+        decimal profitPercentage,
         int interval,
         CancellationToken cancellationToken)
     {
@@ -139,6 +139,7 @@ public class TilsonService(IMarketDataService marketDataService,
 
         while (cancellationToken.IsCancellationRequested == false)
         {
+
             await TryClosePositionAsync(
                 symbol,
                 currentAction,
@@ -158,39 +159,35 @@ public class TilsonService(IMarketDataService marketDataService,
                 RLogger.AppLog.Information("STOPPING PROFIT WATCH....");
             });
 
-
-            var httpResult = WatchProfitHttpAsync(
+            var wsResponse = await futuresHub.WatchTargetProfitAsync(
                 symbol,
                 (await GetPositionDetailsAsync(symbol, cancellationToken)).enterPrice,
-                targetProfitPercent,
+                profitPercentage,
                 timeOutCTS.Token);
 
-            var webSocketResult = futuresHub.WatchTargetProfitAsync(
-                symbol,
-                (await GetPositionDetailsAsync(symbol, cancellationToken)).enterPrice,
-                targetProfitPercent,
-                timeOutCTS.Token);
 
-            var firstTask = await Task.WhenAny(httpResult, webSocketResult);
+            (bool takeProfit, decimal percent) result;
 
-            (bool takeProfit, decimal percent) result; 
-            var maybeData = await firstTask;
-
-            if (maybeData.Data != default)
+            if (wsResponse.Data != default)
             {
-                result = maybeData.Data;
+                result = wsResponse.Data;
             }
-            else 
+            else
             {
-                var secondTask = firstTask == httpResult ? webSocketResult : httpResult;
+                RLogger.AppLog.Information($"ERROR WATCHING PROFIT WS: {wsResponse.Error}");
 
-                if (secondTask.IsFaulted)
+                var httpResponse = await WatchProfitHttpAsync(
+                    symbol,
+                    (await GetPositionDetailsAsync(symbol, cancellationToken)).enterPrice,
+                    profitPercentage,
+                    timeOutCTS.Token);
+
+                if (httpResponse.Error != null)
                 {
-                    RLogger.AppLog.Information($"ERROR WATCHING PROFIT: {secondTask.Exception}");
+                    RLogger.AppLog.Information($"ERROR WATCHING PROFIT HTTP: {httpResponse.Error}");
                     continue;
                 }
-
-                result = (await secondTask).Data;
+                result = httpResponse.Data;
             }
 
             RLogger.AppLog.Information($"takeProfit: {result.takeProfit},  profitPercent: {result.percent}");
@@ -233,7 +230,6 @@ public class TilsonService(IMarketDataService marketDataService,
 
             if (currentProfitRatio >= targetProfitPercent)
             {
-                RLogger.AppLog.Information("PROFIT TARGET REACHED.........HTTP");
                 return new() { Data = (true, currentProfitRatio) };
             }
         }
