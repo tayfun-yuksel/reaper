@@ -8,9 +8,9 @@ public class BrokerController(IBrokerService brokerService) : ControllerBase
 {
 
     [HttpGet(nameof(BuyLimitAsync))]
-    public Task BuyLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+    public async Task BuyLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var response = await brokerService.BuyLimitAsync(symbol, amount, cancellationToken);
     }
     
 
