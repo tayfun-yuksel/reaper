@@ -175,10 +175,11 @@ public class TilsonService(IMarketDataService marketDataService,
                 var (takeProfit, profitPercent) = profit.Data!;
                 if (takeProfit)
                 {
+                    var profitAmount = (await positionDetail()).tradeAmount * profitPercent;
                     RLogger.AppLog.Information($"REALISED PNL: {profitPercent}");
                     RLogger.AppLog.Information("TAKING PROFIT....");
+                    RLogger.AppLog.Information($"PROFIT AMOUNT: {profitAmount}");
 
-                    var profitAmount = (await positionDetail()).tradeAmount * profitPercent;
                     await TryBuyOrSellAsync(symbol, GetOppositeAction(currentAction), profitAmount, cancellationToken);
                 }
             }
