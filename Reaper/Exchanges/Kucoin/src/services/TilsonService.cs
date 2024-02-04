@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Security.Cryptography;
 using Reaper.CommonLib.Interfaces;
 using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.SignalSentinel.Strategies;
@@ -7,8 +5,7 @@ using Reaper.SignalSentinel.Strategies;
 namespace Reaper.Exchanges.Kucoin.Services;
 public class TilsonService(IMarketDataService marketDataService,
     IBrokerService brokerService,
-    IPositionInfoService positionInfoService,
-    IFuturesHub futuresHub) : ITilsonService
+    IPositionInfoService positionInfoService) : ITilsonService
 {
     internal async Task<SignalType> GetTargetActionAsync(
             SignalType position,
@@ -52,10 +49,14 @@ public class TilsonService(IMarketDataService marketDataService,
     {
         if (actionToTake == SignalType.Buy)
         {
+            RLogger.AppLog.Information($"BUYING: ..............{symbol} at {DateTime.UtcNow}");
+            RLogger.AppLog.Information($"AMOUNT: ..............{amount}\n");
             await brokerService.BuyMarketAsync(symbol, amount, cancellationToken);
         }
         else if (actionToTake == SignalType.Sell)
         {
+            RLogger.AppLog.Information($"SELLING..............{symbol} at {DateTime.UtcNow}");
+            RLogger.AppLog.Information($"AMOUNT: .............{amount}\n");
             await brokerService.SellMarketAsync(symbol, amount, cancellationToken);
         }
     }
@@ -106,76 +107,79 @@ public class TilsonService(IMarketDataService marketDataService,
     {
         TimeSpan profitTimeOut = TimeSpan.FromMinutes(interval);
         SignalType currentAction = SignalType.Undefined;
+        var positionDetail = async() => 
+        {
+            if (currentAction == SignalType.Undefined)
+            {
+                return (tradeAmount: amount, enterPrice: 0);
+            }
+
+            var positionDetails = await positionInfoService.GetPositionInfoAsync(symbol, cancellationToken);
+            var (tradeAmount, enterPrice, _) = positionDetails.Data!; 
+            return (tradeAmount, enterPrice);
+        };
 
         while (cancellationToken.IsCancellationRequested == false)
         {
-            RLogger.AppLog.Information($".......................amount: {amount}......................".ToUpper());
             SignalType actionToTake = await GetTargetActionAsync(currentAction,
                 symbol,
                 interval,
                 cancellationToken);
 
-            //close position before target action, if not first trade 
-            if (currentAction != SignalType.Undefined)
+            //close position before target action, if in position
+            if (currentAction == SignalType.Buy || currentAction == SignalType.Sell)
             {
-                RLogger.AppLog.Information("Closing position before target action".ToUpper());
-                await TryBuyOrSellAsync(symbol, actionToTake, amount, cancellationToken);
+                RLogger.AppLog.Information($"CLOSING {currentAction} POSITION....");
+
+                await TryBuyOrSellAsync(
+                    symbol,
+                    actionToTake,
+                    (await positionDetail()).tradeAmount,
+                    cancellationToken);
+                
             }
             //open position
-            await TryBuyOrSellAsync(symbol, actionToTake, amount, cancellationToken);
+            await TryBuyOrSellAsync(symbol,
+                actionToTake, 
+                (await positionDetail()).tradeAmount,
+                cancellationToken);
 
-            if (actionToTake != SignalType.Hold)
+            if (actionToTake == SignalType.Buy || actionToTake == SignalType.Sell)
             {
                 currentAction = actionToTake;
-            }
-
-            var positionDetails = await positionInfoService.GetPositionInfoAsync(symbol, cancellationToken);
-
-            if (positionDetails.Error != null)
-            {
-                throw positionDetails.Error;
             }
 
             //try to take profit
             using var timeOutCTS = new CancellationTokenSource(profitTimeOut);
             timeOutCTS.Token.Register(() =>
             {
-                RLogger.AppLog.Information("Profit watch timeout. Closing watch.".ToUpper());
+                RLogger.AppLog.Information("PROFIT TIMEOUT REACHED.........");
+                RLogger.AppLog.Information("STOPPING PROFIT WATCH....");
             });
-
-            (amount, decimal entryPrice, _) = positionDetails.Data!;
 
             while (timeOutCTS.IsCancellationRequested == false)
             {
                 await Task.Delay(30 * 1000, cancellationToken);
                 var profit = await WatchTargetProfitAsync(
                                     symbol,
-                                    entryPrice,
+                                    (await positionDetail()).enterPrice,
                                     profitPercentage,
                                     cancellationToken);
 
                 if (profit.Error != null)
                 {
-                    RLogger.AppLog.Information($"Error watching target profit: {profit.Error}");
+                    RLogger.AppLog.Information($"ERROR WATHING PROFIT.....: {profit.Error}");
                     continue;
                 }
 
                 var (takeProfit, profitPercent) = profit.Data!;
                 if (takeProfit)
                 {
-                    RLogger.AppLog.Information($"Realized Pnl: {profitPercent}");
-                    RLogger.AppLog.Information("Taking profit....");
+                    RLogger.AppLog.Information($"REALISED PNL: {profitPercent}");
+                    RLogger.AppLog.Information("TAKING PROFIT....");
 
-                    var profitAmount = amount * profitPercent;
+                    var profitAmount = (await positionDetail()).tradeAmount * profitPercent;
                     await TryBuyOrSellAsync(symbol, GetOppositeAction(currentAction), profitAmount, cancellationToken);
-
-                    positionDetails = await positionInfoService.GetPositionInfoAsync(symbol, cancellationToken);
-                    if (positionDetails.Error != null)
-                    {
-                        throw positionDetails.Error;
-                    }
-
-                    (amount, _, _) = positionDetails.Data!;
                 }
             }
         }
