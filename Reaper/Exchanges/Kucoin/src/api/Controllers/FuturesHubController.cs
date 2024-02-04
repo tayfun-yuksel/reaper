@@ -11,12 +11,9 @@ public class FuturesHubController(IFuturesHub futuresHub) : ControllerBase
     public async Task WathcAndSignalProfitAsync(
         [FromQuery] int watchTime,
         [FromQuery] string symbol,
-        [FromQuery] decimal tradeAmount,
         [FromQuery] decimal profitPercentage,
         CancellationToken cancellationToken)
     {
-        var limit = TimeSpan.FromMinutes(watchTime);
-        var targetPnl = tradeAmount * profitPercentage;
-        await futuresHub.WatchTargetProfitAsync(targetPnl, limit, symbol);
+        throw new NotImplementedException();
     }
 }

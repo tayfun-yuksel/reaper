@@ -18,7 +18,7 @@ using Reaper.Exchanges.Kucoin.Services.Models;
 namespace Reaper.Exchanges.Kucoin.Services.Converters;
 public static class KlineConverter
 {
-    public static Result<SpotKline[]> ToSpotKlineArray(this string jsonArray)
+    public static Result<SpotKline[]> ToSpotKlineArray(this string jsonArray, Serilog.ILogger logger)
     {
         try
         {
@@ -50,7 +50,7 @@ public static class KlineConverter
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error deserializing JSON: {ex.Message}");
+            RLogger.AppLog.Information($"Error deserializing JSON: {ex.Message}");
             return new Result<SpotKline[]>{ Error = ex };
         }
     }
@@ -86,7 +86,7 @@ public static class KlineConverter
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error deserializing JSON: {ex.Message}");
+            RLogger.AppLog.Information($"Error deserializing JSON: {ex.Message}");
             return new Result<List<FuturesKline>>{ Error = ex };
         }
     }

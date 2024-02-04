@@ -12,68 +12,73 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
     private readonly KucoinOptions _kucoinOptions = options.Value;
 
 
-    public async Task<decimal> GetSymbolPriceAsync(string symbol, CancellationToken cancellationToken)
+    public async Task<Result<decimal>> GetSymbolPriceAsync(string symbol, CancellationToken cancellationToken)
     {
-        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.FuturesBaseUrl, true);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, true);
 
-        var getSymbolPriceFn = async (IFlurlClient client, object? requestData, CancellationToken cancellationToken) =>
-            await client.Request()
-                .AppendPathSegments("api", "v1", "contracts", symbol)
+        var getSymbolPriceFn = async () => await flurlClient.Request()
+                .AppendPathSegments("api", "v1", "contracts", symbol.ToUpper())
                 .WithSignatureHeaders(_kucoinOptions, "GET") 
                 .GetAsync(HttpCompletionOption.ResponseContentRead, cancellationToken)
                 .ReceiveString();
 
-        Result<string> result = await getSymbolPriceFn.CallAsync(flurlClient, new
-        {
-            symbol = symbol.ToUpper()
-        }, cancellationToken);
+        Result<string> result = await getSymbolPriceFn
+            .WithErrorPolicy(RetryPolicies.HttpErrorLogAndRetryPolicy)
+            .CallAsync();
+
 
         if (result.Error != null)
         {
-            return 0;
+            return new(){ Error = result.Error };
         }
 
         dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
         decimal markPrice = (decimal)response.data.indexPrice;
-        return markPrice;
+
+        return new(){ Data = markPrice };
     }
 
 
 
-    public async Task<IEnumerable<decimal>> GetKlinesAsync(string symbol,
+    public async Task<Result<IEnumerable<decimal>>> GetKlinesAsync(string symbol,
         string startTime,
         string? endTime,
         int interval,
         CancellationToken cancellationToken)
     {
-        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.FuturesBaseUrl, true);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions
+            .GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, true);
 
-        var klinesFn = async (IFlurlClient client, object? requestData, CancellationToken cancellation) =>
-            await client.Request()
-                .AppendPathSegments("api", "v1", "kline", "query")
-                .SetQueryParams(requestData)
-                .GetAsync(HttpCompletionOption.ResponseContentRead, cancellation)
-                .ReceiveString();
-
-        Result<string> result = await klinesFn.CallAsync(flurlClient, new
+        var fromResult = startTime.ToUtcEpochMs();
+        var toResult = endTime?.ToUtcEpochMs();
+        //todo: handle error
+        var queryParams = new
         {
             symbol = symbol.ToUpper(),
             granularity = interval,
-            from = startTime.ToUtcEpochMs(),
-            to = endTime?.ToUtcEpochMs()
-        }, cancellationToken);
+            from = fromResult.Data!,
+            to = toResult?.Data
+        };
+
+        var klinesFn = async () => await flurlClient.Request()
+                .AppendPathSegments("api", "v1", "kline", "query")
+                .SetQueryParams(queryParams)
+                .GetAsync(HttpCompletionOption.ResponseContentRead, cancellationToken)
+                .ReceiveString();
+
+        Result<string> result = await klinesFn
+            .WithErrorPolicy(RetryPolicies.HttpErrorLogAndRetryPolicy)
+            .CallAsync();
 
         if (result.Error != null)
         {
-            Console.WriteLine($"Error: {result.Error.Message}");
-            return [];
+            return new(){ Error = result.Error }; 
         }
-
         var klines = result.Data!.ToFuturesKlineArray().Data;
         var prices = klines!
             .Select(x => x.ClosePrice)
             .ToList() as IEnumerable<decimal>;
 
-        return prices!;
+        return new(){ Data = prices };
     }
 }

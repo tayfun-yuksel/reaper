@@ -1,51 +1,80 @@
+using System.Globalization;
 using Reaper.SignalSentinel.Strategies;
+using Serilog;
 
 namespace Reaper.Exchanges.Kucoin.Services;
 public class BackTestService(IMarketDataService marketDataService) : IBackTestService
 {
-    internal static decimal GetShortPositionProfit(decimal shortEntryPrice, decimal currentPrice, decimal assests)
+    internal static decimal GetProfitAmount(decimal entryPrice, decimal currentPrice, decimal assests, SignalType position)
     {
-        var realizedProfit = (shortEntryPrice - currentPrice) * assests;
-        Console.WriteLine($"Realized Profit From Short: {realizedProfit}");
-        return realizedProfit;
+        if (position != SignalType.Buy && position != SignalType.Sell)
+        {
+            return 0;
+        }
+
+        if (position == SignalType.Buy)
+        {
+            var longProfit = (currentPrice - entryPrice) * assests;
+            RLogger.AppLog.Information($"Realized Profit From Long: {longProfit}");
+            return longProfit;
+        }
+        var shortProfit = (entryPrice - currentPrice) * assests;
+        RLogger.AppLog.Information($"Realized Profit From Short: {shortProfit}");
+        return shortProfit;
     }
 
-    internal static decimal GetLongPositionProfit(decimal longEntryPrice, decimal currentPrice, decimal assests)
-    {
-        var realizedProfit = (currentPrice - longEntryPrice) * assests;
-        Console.WriteLine($"Realized Profit From Long: {realizedProfit}");
-        return realizedProfit;
-    }
 
     internal async Task<List<decimal>> GetKlinesAsync(string symbol, string startTime, string? endTime, int interval, CancellationToken cancellationToken)
     {
-        var getFromAndToTimeFn = (string startTime, int interval) =>
+        var now = DateTime.Now;
+        var getTimeRange = (string start, int interval) =>
         {
+            var fromResult = start.ToUtcEpochMs();
+            if (fromResult.Error != null)
+            {
+                //todo: handle result<>
+                throw new InvalidOperationException("Error getting klines", fromResult.Error);
+            }
+
             int klinesLimit = 200;
-            long from = startTime.ToUtcEpochMs();
+            long from = fromResult.Data!;
             long msMultiplier = 60 * 1000;
             long range = interval * klinesLimit * msMultiplier;
             long to = from + range;
 
-            if (to > DateTime.UtcNow.Ticks)
+            if (to > DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
             {
-                to = DateTime.UtcNow.Ticks;
+                to = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             }
+
             var fromStr = from.FromUtcMsToLocalTime().ToString("dd-MM-yyyy HH:mm");
             var endStr = to.FromUtcMsToLocalTime().ToString("dd-MM-yyyy HH:mm");
             return (fromStr, endStr);
         };
 
         List<decimal> prices = [];
-        var (from, to) = getFromAndToTimeFn(startTime, interval);
+        var (from, to) = getTimeRange(startTime, interval);
+
         while (true)
         {
-            var klines = await marketDataService.GetKlinesAsync(symbol, from, to, interval, cancellationToken);
-            from = to;
-            (from, to) = getFromAndToTimeFn(from, interval);
+            RLogger.AppLog.Information($"Getting klines from {from} to {to}");
+            var klinesResult = await marketDataService
+                .GetKlinesAsync(symbol, from, to, interval, cancellationToken);
 
-            prices.AddRange(klines);
-            if (!klines.Any())
+            if (klinesResult.Error != null)
+            {
+                throw new InvalidOperationException("Error getting klines", klinesResult.Error);
+            }
+
+            from = to;
+            (from, to) = getTimeRange(from, interval);
+
+            prices.AddRange(klinesResult.Data!);
+
+            if (!klinesResult.Data!.Any() || DateTime.ParseExact(
+                    to,
+                    "dd-MM-yyyy HH:mm",
+                    CultureInfo.InvariantCulture) >= now)
             {
                 break;
             }
@@ -56,49 +85,55 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
 
 
 
-    internal static decimal CalculateTradeAmount(int startIndex, decimal tradeAmount,
+    internal static decimal CalculateTradeAmount(string symbol, int startIndex, decimal tradeAmount,
          decimal[] originalPriceList, Func<int, SignalType> signalAction)
     {
+        if (originalPriceList.Length == 0)
+        {
+            RLogger.AppLog.Error("NO PRICE DATA");
+            return tradeAmount;
+        }
+
         SignalType position = SignalType.Undefined;
         int noSignalCount = 0;
         decimal entryPrice = 0;
-
+        decimal assests = 0; 
 
         for (int i = startIndex; i < originalPriceList.Length; i++)
         {
             decimal currentPrice = originalPriceList[i];
-            decimal assests = tradeAmount / currentPrice;
-
             var actionToTake = signalAction(i);
 
             if (position != SignalType.Buy && actionToTake == SignalType.Buy)
             {
-                if (position == SignalType.Sell)
-                {
-                    tradeAmount += GetShortPositionProfit(entryPrice, currentPrice, assests);
-                }
+                RLogger.AppLog.Information($"........................BUYING {symbol.ToUpper()}...................");
+
+                assests = tradeAmount / currentPrice;
+                tradeAmount += GetProfitAmount(entryPrice, currentPrice, assests, position);
                 entryPrice = currentPrice;
                 position = SignalType.Buy;
-                Console.WriteLine($"Buy Signal");
             }
             else if (position != SignalType.Sell && actionToTake == SignalType.Sell)
             {
-                if (position == SignalType.Buy)
-                {
-                    tradeAmount += GetLongPositionProfit(entryPrice, currentPrice, assests);
-                }
+                RLogger.AppLog.Information($"........................SELLING {symbol.ToUpper()}...................");
+
+                assests = tradeAmount / currentPrice;
+                tradeAmount += GetProfitAmount(entryPrice, currentPrice, assests, position);
                 entryPrice = currentPrice;
                 position = SignalType.Sell;
-                Console.WriteLine($"Sell Signal");
             }
             else
             {
+                RLogger.AppLog.Information($".......................HOLDING {symbol.ToUpper()} AT {DateTime.UtcNow}.....");
+                RLogger.AppLog.Information($"Current Price: {currentPrice}");
+                RLogger.AppLog.Information($"Assets: {assests}");
+                RLogger.AppLog.Information($"Current Balance: {assests * currentPrice} \n");
                 noSignalCount++;
-                Console.WriteLine($"NO SIGNAL");
             }
+
         }
 
-        Console.WriteLine($"Final: {tradeAmount}");
+        RLogger.AppLog.Information($"Final: {tradeAmount}");
         return tradeAmount;
     }
 
@@ -131,7 +166,7 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
             return SignalType.Hold;
         };
 
-        var amount = CalculateTradeAmount(period, tradeAmount, pricesList, signalAction);
+        var amount = CalculateTradeAmount(symbol, period, tradeAmount, pricesList, signalAction);
         return amount;
 
     }
@@ -181,7 +216,7 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
             return SignalType.Hold;
         }
 
-        var amount = CalculateTradeAmount(longPeriod, tradeAmount, pricesList, signalAction);
+        var amount = CalculateTradeAmount(symbol, longPeriod, tradeAmount, pricesList, signalAction);
         return amount;
     }
 
@@ -204,7 +239,6 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
 
         SignalType signalAction(int index) 
         {
-
             if (t3Values[index] > pricesList[index])
             {
                 return SignalType.Buy;
@@ -213,35 +247,10 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
             {
                 return SignalType.Sell;
             }
-
-            // int buySignalCount = 0;
-            // int sellSignalCount = 0;
-            // for (int i = index - 3; i < index; i++)
-            // {
-            //     if (t3Values[i] > pricesList[i])
-            //     {
-            //         buySignalCount++;
-            //     }
-            //     else if (t3Values[i] < pricesList[i])
-            //     {
-            //         sellSignalCount++;
-            //     }
-            // }
-
-            // if (buySignalCount > sellSignalCount)
-            // {
-            //     return SignalType.Buy;
-            // }
-            // else if (buySignalCount < sellSignalCount)
-            // {
-            //     return SignalType.Sell;
-            // }
-
             return SignalType.Hold;
-        
         };
 
-        var amount = CalculateTradeAmount(period, tradeAmount, [.. pricesList], signalAction);
+        var amount = CalculateTradeAmount(symbol, period, tradeAmount, [.. pricesList], signalAction);
         return amount;
     }
 
@@ -308,12 +317,11 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
             {
                 return SignalType.Sell;
             }
-
             return SignalType.Hold;
         };
 
         var period = tilsonPeriod > bollingerPeriod ? tilsonPeriod : bollingerPeriod;
-        var amount = CalculateTradeAmount(period, tradeAmount, pricesList, signalAction);
+        var amount = CalculateTradeAmount(symbol, period, tradeAmount, pricesList, signalAction);
         return amount;
     } 
 

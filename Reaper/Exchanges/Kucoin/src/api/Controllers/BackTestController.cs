@@ -33,7 +33,7 @@ public class BackTestController(IBackTestService backTestService) : ControllerBa
                 + string.Join(", ", TimeExtensions.AllowedIntervalInMinutes));
         }
         var finalAmount = await backTestService.TilsonT3Async(symbol, startTime, endTime, interval, tradeAmount, volumeFactor, cancellationToken);
-        Console.WriteLine($"tilson-amount: {finalAmount}");
+        RLogger.AppLog.Information($"tilson-amount: {finalAmount}");
         return Ok(finalAmount);
     }
 
@@ -57,7 +57,7 @@ public class BackTestController(IBackTestService backTestService) : ControllerBa
         var finalAmount = await backTestService.MACDAsync(symbol, startTime, endTime, interval, tradeAmount,
                                                           shortPeriod, longPeriod, smoothLine, cancellationToken);
 
-        Console.WriteLine($"macd-amount: {finalAmount}");
+        RLogger.AppLog.Information($"macd-amount: {finalAmount}");
         return Ok(finalAmount);
     }
 
@@ -80,7 +80,7 @@ public class BackTestController(IBackTestService backTestService) : ControllerBa
         var finalAmount = await backTestService.BollingerBandsAsync(symbol, startTime, endTime, interval, tradeAmount,
                                                                    period, deviationMultiplier, cancellationToken);
 
-        Console.WriteLine($"bolinger-amount: {finalAmount}");
+        RLogger.AppLog.Information($"bolinger-amount: {finalAmount}");
         return Ok(finalAmount);
     }
 
@@ -108,7 +108,7 @@ public class BackTestController(IBackTestService backTestService) : ControllerBa
                                                                                 deviationMultiplier,
                                                                                 cancellationToken);
 
-        Console.WriteLine($"bolinger-tilson-amount: {finalAmount}");
+        RLogger.AppLog.Information($"bolinger-tilson-amount: {finalAmount}");
         return Ok(finalAmount);
     }
 }

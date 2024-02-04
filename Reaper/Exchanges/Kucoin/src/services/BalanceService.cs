@@ -13,16 +13,19 @@ public class BalanceService(IOptions<KucoinOptions> kucoinOptions) : IBalanceSer
     public async Task<TBalance?> GetBalanceAsync<TBalance>(string? symbol, CancellationToken cancellationToken)
         where TBalance : class
     {
-        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(_kucoinOptions.BaseUrl, true);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions
+            .GetFlurlClient(RLogger.HttpLog, _kucoinOptions.BaseUrl, true);
 
-        var getBalanceFn = async (IFlurlClient client, object? requestData, CancellationToken cancellation) 
-            => await client.Request()
+        var getBalanceFn = async () => await flurlClient.Request()
                 .AppendPathSegments("api", "v1", "accounts")
                 .WithSignatureHeaders(_kucoinOptions, "GET")
-                .GetAsync(HttpCompletionOption.ResponseContentRead, cancellation)
+                .GetAsync(HttpCompletionOption.ResponseContentRead, cancellationToken)
                 .ReceiveString();
 
-        Result<string> result = await getBalanceFn.CallAsync(flurlClient, null, cancellationToken);
+        Result<string> result = await getBalanceFn
+            .WithErrorPolicy(RetryPolicies.HttpErrorLogAndRetryPolicy)
+            .CallAsync();
+
         dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
 
         var symbolInfo = ((IEnumerable<dynamic>)response.data)

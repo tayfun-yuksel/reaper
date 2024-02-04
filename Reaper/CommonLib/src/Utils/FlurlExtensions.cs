@@ -4,36 +4,35 @@ using Flurl.Http;
 namespace Reaper.CommonLib.Utils;
 public static class FlurlExtensions
 {
-    
-    public static IFlurlClient GetFlurlClient(string baseUrl, bool enableLogging)
+    public static IFlurlClient GetFlurlClient(Serilog.ILogger logger, string baseUrl, bool enableLogging)
     {
         var client = new FlurlClient(baseUrl);
         client.BeforeCall(async call =>
         {
+            if (!enableLogging) return;
+
             var requestHeaders = call.Request.Headers;
             var requestContent = call.Request.Content == null ? null : await call.Request.Content.ReadAsStreamAsync();
-            if (!enableLogging) return;
-            Console.WriteLine("OnBeforeCall:");
-            Console.WriteLine($"Request-Url: {call.Request.Url}");
-            Console.WriteLine($"Request-Headers: {JsonSerializer.Serialize(requestHeaders)}");
-            Console.WriteLine($"Request-Content: {requestContent}");
+            logger.Information("OnBeforeCall:");
+            logger.Information($"Request-Url: {call.Request.Url}");
+            logger.Information($"Request-Headers: {JsonSerializer.Serialize(requestHeaders)}");
+            logger.Information($"Request-Content: {requestContent}");
         });
 
         client.OnError(async call =>
         {
-            if (!enableLogging) return;
-            Console.WriteLine("OnError:");
-            Console.WriteLine($"Request-Url: {call.Request.Url}");
-            Console.WriteLine($"Error: {call.Exception.Message}");
-            Console.WriteLine($"Response: {await call.Response.GetStringAsync()}");
+            logger.Error("OnError:");
+            logger.Error($"Request-Url: {call.Request.Url}");
+            logger.Error($"Error: {call.Exception.Message}");
+            logger.Error($"Response: {await call.Response.GetStringAsync()}");
         });
 
         client.AfterCall(async call =>
         {
             if (!enableLogging) return;
-            Console.WriteLine("OnAfterCall:");
-            Console.WriteLine($"Request-Url: {call.Request.Url}");
-            Console.WriteLine($"Response: {await call.Response.GetStringAsync()}");
+            logger.Information("OnAfterCall:");
+            logger.Information($"Request-Url: {call.Request.Url}");
+            logger.Information($"Response: {await call.Response.GetStringAsync()}");
         });
         return client;
     }

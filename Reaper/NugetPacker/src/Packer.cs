@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Diagnostics.SymbolStore;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -8,11 +6,13 @@ using System.Xml.Linq;
 namespace NugetPacker;
 public static class Packer
 {
+    private static Match VersionMatch(string str) => Regex.Match(str, @"(\d+\.\d+\.\d+)");
+
     internal static (string name, string version) ExtractPackageNameAndVersion(string filePath)
     {
         string fileName = Path.GetFileNameWithoutExtension(filePath);
+        var versionMatch = VersionMatch(fileName);
 
-        var versionMatch = Regex.Match(fileName, @"(\d+\.\d+\.\d+)");
         if (versionMatch.Success)
         {
             return (fileName.Replace($".{versionMatch.Value}", string.Empty), versionMatch.Groups[1].Value);
@@ -20,6 +20,9 @@ public static class Packer
 
         throw new InvalidOperationException("Version not found");
     }
+
+
+
     internal static void CleanTarget(string srcPath, string targetPath)
     {
         try
@@ -96,10 +99,11 @@ internal static void UpdatePackageReference(string csProjFile, Dictionary<string
     {
         XDocument doc = XDocument.Load(csProjFile);
         var packageReferences = doc.Descendants("PackageReference");
-        foreach (var packageReference in packageReferences)
+
+        foreach (XElement packageReference in packageReferences)
         {
             XAttribute packageName = packageReference.Attribute("Include")!;
-            Version srcVersion = new(packageReference.Attribute("Version")!.Value);
+            Version srcVersion = new(VersionMatch(packageReference.Attribute("Version")!.Value).Value);
             if (!packagesToUpdate.TryGetValue(packageName!.Value, out var targetVersionStr))
             {
                 continue;

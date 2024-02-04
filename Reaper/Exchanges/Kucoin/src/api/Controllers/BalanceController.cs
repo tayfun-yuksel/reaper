@@ -6,8 +6,7 @@ using Reaper.Exchanges.Kucoin.Services.Models;
 namespace Reaper.Exchanges.Kucoin.Api;
 [ApiController]
 [Route("[controller]")]
-public class BalanceController(IBalanceService balanceService,
-                               IOptions<KucoinOptions> options) : ControllerBase
+public class BalanceController(IBalanceService balanceService) : ControllerBase
 {
     [HttpGet(nameof(GetBalanceAsync))]
     public async Task<IActionResult> GetBalanceAsync(string? symbol, CancellationToken cancellationToken)
