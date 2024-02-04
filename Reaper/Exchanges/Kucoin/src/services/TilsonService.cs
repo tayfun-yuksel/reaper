@@ -5,7 +5,8 @@ using Reaper.SignalSentinel.Strategies;
 namespace Reaper.Exchanges.Kucoin.Services;
 public class TilsonService(IMarketDataService marketDataService,
     IBrokerService brokerService,
-    IPositionInfoService positionInfoService) : ITilsonService
+    IPositionInfoService positionInfoService,
+    IFuturesHub futuresHub) : ITilsonService
 {
     internal async Task<SignalType> GetTargetActionAsync(
             SignalType position,
@@ -76,74 +77,72 @@ public class TilsonService(IMarketDataService marketDataService,
     }
 
 
-    internal async Task<Result<(bool takeProfit, decimal percent)>> WatchTargetProfitAsync(
+
+
+
+    internal async Task<(decimal tradeAmount, decimal enterPrice)> GetPositionDetailsAsync(
         string symbol,
-        decimal entryPrice,
-        decimal targetPnlPercent,
         CancellationToken cancellationToken)
     {
-        var markPrice = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
+        var positionDetails = await positionInfoService.GetPositionInfoAsync(symbol, cancellationToken);
+        var (tradeAmount, enterPrice, _) = positionDetails.Data!;
+        return (tradeAmount, enterPrice);
+    }
 
-        if (markPrice.Error != null)
-        {
-            return new() { Error = markPrice.Error };
-        }
-        var currentProfitRatio = (markPrice.Data - entryPrice) / entryPrice;
 
-        if (currentProfitRatio >= targetPnlPercent)
+    internal async Task TryClosePositionAsync(string symbol,
+        SignalType currentAction,
+        SignalType actionToTake,
+        CancellationToken cancellationToken)
+    {
+        if ((currentAction == SignalType.Buy || currentAction == SignalType.Sell)
+            && actionToTake != SignalType.Hold )
         {
-            return new() { Data = (true, currentProfitRatio) };
+            RLogger.AppLog.Information($"CLOSING {currentAction} POSITION....");
+            RLogger.AppLog.Information($"BEFORE: {actionToTake}....");
+
+            //close position
+            await TryBuyOrSellAsync(
+                symbol,
+                actionToTake,
+                (await GetPositionDetailsAsync(symbol, cancellationToken)).tradeAmount,
+                cancellationToken);
+            
+            //open position
+            await TryBuyOrSellAsync(symbol,
+                actionToTake, 
+                (await GetPositionDetailsAsync(symbol, cancellationToken)).tradeAmount,
+                cancellationToken);
         }
-        return new() { Data = (false, currentProfitRatio) };
     }
 
 
     public async Task RunAsync(
         string symbol,
         decimal amount,
-        decimal profitPercentage,
+        decimal targetProfitPercent,
         int interval,
         CancellationToken cancellationToken)
     {
         TimeSpan profitTimeOut = TimeSpan.FromMinutes(interval);
         SignalType currentAction = SignalType.Undefined;
-        var positionDetail = async(SignalType currentPosition) => 
-        {
-            if (currentPosition == SignalType.Undefined)
-            {
-                return (tradeAmount: amount, enterPrice: 0);
-            }
+        SignalType actionToTake = await GetTargetActionAsync(currentAction,
+            symbol,
+            interval,
+            cancellationToken);
 
-            var positionDetails = await positionInfoService.GetPositionInfoAsync(symbol, cancellationToken);
-            var (tradeAmount, enterPrice, _) = positionDetails.Data!; 
-            return (tradeAmount, enterPrice);
-        };
+        //first position
+        await TryBuyOrSellAsync(symbol,
+            actionToTake, 
+            (await GetPositionDetailsAsync(symbol, cancellationToken)).tradeAmount,
+            cancellationToken);
 
         while (cancellationToken.IsCancellationRequested == false)
         {
-            SignalType actionToTake = await GetTargetActionAsync(currentAction,
+            await TryClosePositionAsync(
                 symbol,
-                interval,
-                cancellationToken);
-
-            //close position before target action, if in position
-            if ((currentAction == SignalType.Buy || currentAction == SignalType.Sell)
-                && actionToTake != SignalType.Hold )
-            {
-                RLogger.AppLog.Information($"CLOSING {currentAction} POSITION....");
-                RLogger.AppLog.Information($"BEFORE: {actionToTake}....");
-
-                await TryBuyOrSellAsync(
-                    symbol,
-                    actionToTake,
-                    (await positionDetail(currentAction)).tradeAmount,
-                    cancellationToken);
-                
-            }
-            //open position
-            await TryBuyOrSellAsync(symbol,
-                actionToTake, 
-                (await positionDetail(currentAction)).tradeAmount,
+                currentAction,
+                actionToTake,
                 cancellationToken);
 
             if (actionToTake == SignalType.Buy || actionToTake == SignalType.Sell)
@@ -159,33 +158,86 @@ public class TilsonService(IMarketDataService marketDataService,
                 RLogger.AppLog.Information("STOPPING PROFIT WATCH....");
             });
 
-            while (timeOutCTS.IsCancellationRequested == false)
-            {
-                await Task.Delay(5 * 1000, cancellationToken);
-                var profit = await WatchTargetProfitAsync(
-                                    symbol,
-                                    (await positionDetail(currentAction)).enterPrice,
-                                    profitPercentage,
-                                    cancellationToken);
 
-                if (profit.Error != null)
+            var httpResult = WatchProfitHttpAsync(
+                symbol,
+                (await GetPositionDetailsAsync(symbol, cancellationToken)).enterPrice,
+                targetProfitPercent,
+                timeOutCTS.Token);
+
+            var webSocketResult = futuresHub.WatchTargetProfitAsync(
+                symbol,
+                (await GetPositionDetailsAsync(symbol, cancellationToken)).enterPrice,
+                targetProfitPercent,
+                timeOutCTS.Token);
+
+            var firstTask = await Task.WhenAny(httpResult, webSocketResult);
+
+            (bool takeProfit, decimal percent) result; 
+            var maybeData = await firstTask;
+
+            if (maybeData.Data != default)
+            {
+                result = maybeData.Data;
+            }
+            else 
+            {
+                var secondTask = firstTask == httpResult ? webSocketResult : httpResult;
+
+                if (secondTask.IsFaulted)
                 {
-                    RLogger.AppLog.Information($"ERROR WATHING PROFIT.....: {profit.Error}");
+                    RLogger.AppLog.Information($"ERROR WATCHING PROFIT: {secondTask.Exception}");
                     continue;
                 }
 
-                var (takeProfit, profitPercent) = profit.Data!;
-		RLogger.AppLog.Information($"takeProfit: {takeProfit},  profitPercent: {profitPercent}");
-                if (takeProfit)
-                {
-                    var profitAmount = (await positionDetail(currentAction)).tradeAmount * profitPercent;
-                    RLogger.AppLog.Information($"REALISED PNL: {profitPercent}");
-                    RLogger.AppLog.Information("TAKING PROFIT....");
-                    RLogger.AppLog.Information($"PROFIT AMOUNT: {profitAmount}");
+                result = (await secondTask).Data;
+            }
 
-                    await TryBuyOrSellAsync(symbol, GetOppositeAction(currentAction), profitAmount, cancellationToken);
-                }
+            RLogger.AppLog.Information($"takeProfit: {result.takeProfit},  profitPercent: {result.percent}");
+
+            if (result.takeProfit)
+            {
+                var profitAmount = (await GetPositionDetailsAsync(symbol, cancellationToken)).tradeAmount 
+                    * result.percent;
+
+                RLogger.AppLog.Information("TAKING PROFIT....");
+                RLogger.AppLog.Information($"PROFIT AMOUNT: {profitAmount}");
+
+                await TryBuyOrSellAsync(symbol, GetOppositeAction(currentAction), profitAmount, cancellationToken);
+            }
+
+            actionToTake = await GetTargetActionAsync(currentAction, symbol, interval, cancellationToken);
+        }
+    }
+
+
+
+    private async Task<Result<(bool takeProfit, decimal percent)>> WatchProfitHttpAsync(
+        string symbol,
+        decimal entryPrice,
+        decimal targetProfitPercent,
+        CancellationToken cancellationToken)
+    {
+        while (cancellationToken.IsCancellationRequested == false)
+        {
+            await Task.Delay(5 * 1000, cancellationToken);
+
+            var markPrice = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
+            if (markPrice.Error != null)
+            {
+                RLogger.AppLog.Information($"ERROR WATHING PROFIT.....: {markPrice.Error}");
+                continue;
+            }
+
+            var currentProfitRatio = (markPrice.Data - entryPrice) / entryPrice;
+
+            if (currentProfitRatio >= targetProfitPercent)
+            {
+                RLogger.AppLog.Information("PROFIT TARGET REACHED.........HTTP");
+                return new() { Data = (true, currentProfitRatio) };
             }
         }
+
+        return new() { Data = (false, 0) };
     }
 }
