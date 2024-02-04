@@ -54,7 +54,6 @@ public class FuturesHub(IOptions<KucoinOptions> options,
 
             string messageJson = JsonConvert.SerializeObject(new
             {
-                privateChannel = true,
                 type = "subscribe",
                 topic = $"/contract/instrument:{symbol.ToUpper()}", 
             });
@@ -77,69 +76,64 @@ public class FuturesHub(IOptions<KucoinOptions> options,
 
 
 
-    // public async Task<Result<(bool takeProfit, decimal profitPercent)>> WatchTargetProfitAsync(
-    //     string symbol,
-    //     decimal entryPrice,
-    //     decimal targetPnlPercent,
-    //     TimeSpan watchTime)
-    // {
-    //     using var timeOutCTS = new CancellationTokenSource(watchTime);
-    //     var webSocketResult = await MarketDataWebSocket(symbol, timeOutCTS.Token);
+    public async Task<Result<(bool takeProfit, decimal profitPercent)>> WatchTargetProfitAsync(
+        string symbol,
+        decimal entryPrice,
+        decimal targetPnlPercent,
+        CancellationToken cancellationToken)
+    {
+        var marketSocket = await MarketDataWebSocket(symbol, cancellationToken);
 
-    //     if (webSocketResult.Error != null)
-    //     {
-    //         return new() { Error = webSocketResult.Error };
-    //     }
+        if (marketSocket.Error != null)
+        {
+            return new() { Error = marketSocket.Error };
+        }
 
-    //     using var marketDataConnection = webSocketResult.Data!;
+        using var marketDataConnection = marketSocket.Data!;
 
-    //     timeOutCTS.Token.Register(() =>
-    //     {
-    //         Console.WriteLine("WatchProfit timeout. Closing websocket.");
-    //         marketDataConnection.Abort();
-    //     });
+        while (marketDataConnection.State == WebSocketState.Open 
+                && !cancellationToken.IsCancellationRequested)
+        {
+            var buffer = new byte[1024 * 4];
+            var receiveFn = async() => await marketDataConnection.ReceiveAsync(buffer, cancellationToken);
 
-
-    //     while (marketDataConnection.State == WebSocketState.Open && !timeOutCTS.IsCancellationRequested)
-    //     {
-    //         var buffer = new byte[1024 * 4];
-    //         var receiveFn = async() => await marketDataConnection.ReceiveAsync(buffer, timeOutCTS.Token);
-    //         var socketMsgResult = await receiveFn
-    //             .WithErrorPolicy(RetryPolicies.WebSocketLogAndRetryPolicy)
-    //             .CallAsync();
+            var socketMsgResult = await receiveFn
+                .WithErrorPolicy(RetryPolicies.WebSocketLogAndRetryPolicy)
+                .CallAsync();
             
-    //         if (socketMsgResult.Error != null)
-    //         {
-    //             return new() { Error = socketMsgResult.Error };
-    //         }
+            if (socketMsgResult.Error != null)
+            {
+                return new() { Error = socketMsgResult.Error };
+            }
 
-    //         if (socketMsgResult.Data!.MessageType == WebSocketMessageType.Text)
-    //         {
-    //             string response = System.Text.Encoding.UTF8.GetString(buffer, 0, socketMsgResult.Data!.Count);
-    //             RLogger.AppLog.Information(
-    //                 $"WatchProfit received message: ",
-    //                 response);
+            if (socketMsgResult.Data!.MessageType == WebSocketMessageType.Text)
+            {
+                string response = System.Text.Encoding.UTF8.GetString(buffer, 0, socketMsgResult.Data!.Count);
+                RLogger.AppLog.Information(
+                    $"WatchProfit received message: ",
+                    response);
 
-    //             dynamic marketData = JsonConvert.DeserializeObject<ExpandoObject>(response);
+                dynamic marketData = JsonConvert.DeserializeObject<ExpandoObject>(response);
 
-    //             if (marketData.type != "message" || marketData.subject != "mark.index.price")
-    //             {
-    //                 RLogger.AppLog.Information(
-    //                     $"Received message is not a position change",
-    //                     response,
-    //                     ConsoleColor.Red);
-    //                 continue;
-    //             }
+                if (marketData.type != "message" || marketData.subject != "mark.index.price")
+                {
+                    RLogger.AppLog.Information(
+                        $"Received message is not a position change",
+                        response,
+                        ConsoleColor.Red);
+                    continue;
+                }
 
-    //             var markPrice = (decimal)marketData.data.markPrice;
-    //             var currentProfitPercent = markPrice / entryPrice; 
-
-    //             if (currentProfitPercent >= targetPnlPercent)
-    //             {
-    //                 return new() { Data = (true, currentProfitPercent) };
-    //             }
-    //         }
-    //     } 
-    //     return new() { Data = (false, 0) };
-    // }
+                var markPrice = (decimal)marketData.data.markPrice;
+                var currentProfitPercent = (markPrice - entryPrice) / entryPrice; 
+                RLogger.AppLog.Information($"currentProfitPercent: {currentProfitPercent}");
+                if (currentProfitPercent >= targetPnlPercent)
+                {
+                    RLogger.AppLog.Information($"PROFIT TARGET REACHED.........WS {symbol}: {currentProfitPercent}");
+                    return new() { Data = (true, currentProfitPercent) };
+                }
+            }
+        } 
+        return new() { Data = (false, 0) };
+    }
 }
