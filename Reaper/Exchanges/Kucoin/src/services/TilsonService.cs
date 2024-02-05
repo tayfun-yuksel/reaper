@@ -14,16 +14,28 @@ public class TilsonService(IMarketDataService marketDataService,
             int interval,
             CancellationToken cancellationToken)
     {
-        var startTime = DateTime.UtcNow.AddMinutes(-(interval * 50)).ToString("dd-MM-yyyy HH:mm");
         var endTime = DateTime.UtcNow.ToString("dd-MM-yyyy HH:mm");
-        var pricesResult = await marketDataService.GetKlinesAsync(symbol, startTime, endTime, interval, cancellationToken);
+
+        var startTime = DateTime.UtcNow
+            .AddMinutes(-(interval * 50))
+            .ToString("dd-MM-yyyy HH:mm");
+
+        var pricesResult = await marketDataService.GetKlinesAsync(
+            symbol,
+            startTime,
+            endTime,
+            interval,
+            cancellationToken);
 
         if (pricesResult.Error != null)
         {
             throw new InvalidOperationException("Error getting klines", pricesResult.Error);
         }
 
-        var t3Values = TilsonT3.CalculateT3([.. pricesResult.Data], period: 6, volumeFactor: 0.5m);
+        var t3Values = TilsonT3.CalculateT3(
+            [.. pricesResult.Data],
+            period: 6,
+            volumeFactor: 0.5m);
 
         var t3Last = t3Values.Last();
         var originLast = pricesResult.Data!.Last();
@@ -80,7 +92,7 @@ public class TilsonService(IMarketDataService marketDataService,
 
 
 
-    internal async Task<(decimal tradeAmount, decimal enterPrice)> GetPositionDetailsAsync(
+    internal async Task<(decimal amountInTrade, decimal enterPrice)> GetPositionDetailsAsync(
         string symbol,
         CancellationToken cancellationToken)
     {
@@ -95,9 +107,14 @@ public class TilsonService(IMarketDataService marketDataService,
         SignalType actionToTake,
         CancellationToken cancellationToken)
     {
-        if ((currentAction == SignalType.Buy || currentAction == SignalType.Sell)
-            && actionToTake != SignalType.Hold )
+        bool trading = currentAction == SignalType.Buy 
+                                || currentAction == SignalType.Sell; 
+        bool buyOrSell = actionToTake == SignalType.Buy 
+                            || actionToTake == SignalType.Sell;
+
+        if (trading && buyOrSell)
         {
+            var amountInTrade = (await GetPositionDetailsAsync(symbol, cancellationToken)).amountInTrade;
             RLogger.AppLog.Information($"CLOSING {currentAction} POSITION....");
             RLogger.AppLog.Information($"BEFORE: {actionToTake}....");
 
@@ -105,13 +122,14 @@ public class TilsonService(IMarketDataService marketDataService,
             await TryBuyOrSellAsync(
                 symbol,
                 actionToTake,
-                (await GetPositionDetailsAsync(symbol, cancellationToken)).tradeAmount,
+                amountInTrade,
                 cancellationToken);
             
             //open position
-            await TryBuyOrSellAsync(symbol,
+            await TryBuyOrSellAsync(
+                symbol,
                 actionToTake, 
-                (await GetPositionDetailsAsync(symbol, cancellationToken)).tradeAmount,
+                amountInTrade,
                 cancellationToken);
         }
     }
@@ -125,30 +143,31 @@ public class TilsonService(IMarketDataService marketDataService,
         CancellationToken cancellationToken)
     {
         TimeSpan profitTimeOut = TimeSpan.FromMinutes(interval);
-        SignalType currentAction = SignalType.Undefined;
-        SignalType actionToTake = await GetTargetActionAsync(currentAction,
+        SignalType currentPosition = SignalType.Undefined;
+        SignalType actionToTake = await GetTargetActionAsync(
+            currentPosition,
             symbol,
             interval,
             cancellationToken);
 
         //first position
-        await TryBuyOrSellAsync(symbol,
+        await TryBuyOrSellAsync(
+            symbol,
             actionToTake, 
             amount, 
             cancellationToken);
 
         while (cancellationToken.IsCancellationRequested == false)
         {
-
             await TryClosePositionAsync(
                 symbol,
-                currentAction,
+                currentPosition,
                 actionToTake,
                 cancellationToken);
 
             if (actionToTake == SignalType.Buy || actionToTake == SignalType.Sell)
             {
-                currentAction = actionToTake;
+                currentPosition = actionToTake;
             }
 
             //try to take profit
@@ -194,16 +213,16 @@ public class TilsonService(IMarketDataService marketDataService,
 
             if (result.takeProfit)
             {
-                var profitAmount = (await GetPositionDetailsAsync(symbol, cancellationToken)).tradeAmount 
-                    * result.percent;
+                var (amountInTrade, enterPrice) = await GetPositionDetailsAsync(symbol, cancellationToken);
+                var profitAmount = amountInTrade * result.percent;
 
                 RLogger.AppLog.Information("TAKING PROFIT....");
                 RLogger.AppLog.Information($"PROFIT AMOUNT: {profitAmount}");
 
-                await TryBuyOrSellAsync(symbol, GetOppositeAction(currentAction), profitAmount, cancellationToken);
+                await TryBuyOrSellAsync(symbol, GetOppositeAction(currentPosition), profitAmount, cancellationToken);
             }
 
-            actionToTake = await GetTargetActionAsync(currentAction, symbol, interval, cancellationToken);
+            actionToTake = await GetTargetActionAsync(currentPosition, symbol, interval, cancellationToken);
         }
     }
 
