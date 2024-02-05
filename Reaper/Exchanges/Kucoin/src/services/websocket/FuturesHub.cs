@@ -120,7 +120,7 @@ public class FuturesHub(IOptions<KucoinOptions> options,
 
 
                 var markPrice = (decimal)marketData.data.markPrice;
-                var currentProfitPercent = (markPrice - entryPrice) / entryPrice; 
+                var currentProfitPercent = Math.Abs(markPrice - entryPrice) / entryPrice; 
 
 
                 RLogger.AppLog.Information($"SYMBOL: {symbol}");

@@ -280,7 +280,7 @@ public class TilsonService(IMarketDataService marketDataService,
                 continue;
             }
 
-            var currentProfitRatio = (markPrice.Data - entryPrice) / entryPrice;
+            var currentProfitRatio = Math.Abs(markPrice.Data - entryPrice) / entryPrice;
 
             if (currentProfitRatio >= targetProfitPercent)
             {
