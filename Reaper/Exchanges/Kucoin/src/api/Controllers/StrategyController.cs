@@ -10,6 +10,7 @@ public class StrategyController(ITilsonService tilsonService) : ControllerBase
     public async Task TilsonT3Async(
         string symbol,
         decimal amount,
+        int leverage,
         decimal profitPercentage,
         int interval,
         CancellationToken cancellationToken)
@@ -17,6 +18,7 @@ public class StrategyController(ITilsonService tilsonService) : ControllerBase
         await tilsonService.RunAsync(
             symbol,
             amount,
+            leverage,
             profitPercentage,
             interval,
             cancellationToken);

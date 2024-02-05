@@ -22,6 +22,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
             string type,
             string symbol,
             decimal amount,
+            int leverage,
             decimal? limitPrice,
             CancellationToken cancellationToken)
     {
@@ -40,7 +41,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
         {
             clientOid = Guid.NewGuid().ToString(),
             symbol = symbol.ToUpper(),
-            leverage = 1,
+            leverage = leverage,
             price = limitPrice,
             side = side,
             size = quantity,
@@ -94,10 +95,11 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
     internal async Task<Result<string>> EnsureTransactionCompleted(
         string symbol,
         decimal amount,
+        int leverage,
         decimal limitPrice,
         string orderId,
-        Func<string, decimal, CancellationToken, Task>? marketAction,
-        Func<string, decimal, decimal, CancellationToken, Task>? limitAction,
+        Func<string, decimal, int, CancellationToken, Task>? marketAction,
+        Func<string, decimal, int, decimal, CancellationToken, Task>? limitAction,
         CancellationToken cancellationToken)
     {
         var msgTemplate = @$"{nameof(BrokerService)}_{nameof(EnsureTransactionCompleted)}: ";
@@ -121,11 +123,11 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
             RLogger.AppLog.Information(msgTemplate + $"buying remaining amount {amountToFill} of {symbol}");
             if (marketAction != null)
             {
-                await marketAction(symbol, amountToFill, cancellationToken);
+                await marketAction(symbol, amountToFill, leverage, cancellationToken);
             }
             else
             {
-                await limitAction!(symbol, amountToFill, limitPrice, cancellationToken);
+                await limitAction!(symbol, amountToFill, leverage, limitPrice, cancellationToken);
             }
         }
         RLogger.AppLog.Information(msgTemplate + "transaction completed");
@@ -137,6 +139,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
     public async Task<Result<string>> BuyLimitAsync(
         string symbol,
         decimal amount,
+        int leverage,
         decimal limitPrice,
         CancellationToken cancellationToken)
     {
@@ -145,6 +148,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
             _type_.limit,
             symbol,
             amount,
+            leverage,
             limitPrice,
             cancellationToken);
 
@@ -160,6 +164,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
         return await EnsureTransactionCompleted(
             symbol,
             amount,
+            leverage,
             limitPrice,
             orderId.Data!,
             marketAction: null,
@@ -171,6 +176,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
     public async Task<Result<string>> BuyMarketAsync(
         string symbol,
         decimal amount,
+        int leverage,
         CancellationToken cancellationToken)
     {
         var orderId = await PlaceMarketOrderAsync(
@@ -178,6 +184,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
             _type_.market,
             symbol,
             amount,
+            leverage,
             limitPrice: null,
             cancellationToken);
 
@@ -192,6 +199,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
         return await EnsureTransactionCompleted(
             symbol,
             amount,
+            leverage,
             limitPrice: 0,
             orderId.Data!,
             marketAction: BuyMarketAsync,
@@ -204,6 +212,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
     public async Task<Result<string>> SellLimitAsync(
         string symbol,
         decimal amount,
+        int leverage,
         decimal limitPrice,
         CancellationToken cancellationToken)
     {
@@ -212,6 +221,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
             _type_.limit,
             symbol,
             amount,
+            leverage,
             limitPrice,
             cancellationToken);
 
@@ -226,6 +236,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
         return await EnsureTransactionCompleted(
             symbol,
             amount,
+            leverage,
             limitPrice,
             orderId.Data!,
             marketAction: null,
@@ -238,6 +249,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
     public async Task<Result<string>> SellMarketAsync(
         string symbol,
         decimal amount,
+        int leverage,
         CancellationToken cancellationToken)
     {
         var orderId = await PlaceMarketOrderAsync(
@@ -245,6 +257,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
             _type_.market,
             symbol,
             amount,
+            leverage,
             limitPrice: null,
             cancellationToken);
 
@@ -259,6 +272,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
         return await EnsureTransactionCompleted(
             symbol,
             amount,
+            leverage,
             limitPrice: 0,
             orderId.Data!,
             marketAction: SellMarketAsync,

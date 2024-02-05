@@ -58,19 +58,24 @@ public class TilsonService(IMarketDataService marketDataService,
 
 
 
-    public async Task BuyOrSellAsync(string symbol, SignalType actionToTake, decimal amount, CancellationToken cancellationToken)
+    public async Task BuyOrSellAsync(
+        string symbol,
+        SignalType actionToTake,
+        decimal amount,
+        int leverage,
+        CancellationToken cancellationToken)
     {
         if (actionToTake == SignalType.Buy)
         {
             RLogger.AppLog.Information($"BUYING: ..............{symbol} at {DateTime.UtcNow}");
             RLogger.AppLog.Information($"AMOUNT: ..............{amount}\n");
-            await brokerService.BuyMarketAsync(symbol, amount, cancellationToken);
+            await brokerService.BuyMarketAsync(symbol, amount, leverage, cancellationToken);
         }
         else if (actionToTake == SignalType.Sell)
         {
             RLogger.AppLog.Information($"SELLING..............{symbol} at {DateTime.UtcNow}");
             RLogger.AppLog.Information($"AMOUNT: .............{amount}\n");
-            await brokerService.SellMarketAsync(symbol, amount, cancellationToken);
+            await brokerService.SellMarketAsync(symbol, amount, leverage, cancellationToken);
         }
     }
 
@@ -103,6 +108,7 @@ public class TilsonService(IMarketDataService marketDataService,
 
 
     internal async Task TryClosePositionAsync(string symbol,
+        int leverage,
         SignalType currentAction,
         SignalType actionToTake,
         CancellationToken cancellationToken)
@@ -123,6 +129,7 @@ public class TilsonService(IMarketDataService marketDataService,
                 symbol,
                 actionToTake,
                 amountInTrade,
+                leverage,
                 cancellationToken);
             
             //open position
@@ -130,6 +137,7 @@ public class TilsonService(IMarketDataService marketDataService,
                 symbol,
                 actionToTake, 
                 amountInTrade,
+                leverage,
                 cancellationToken);
         }
     }
@@ -138,6 +146,7 @@ public class TilsonService(IMarketDataService marketDataService,
     public async Task RunAsync(
         string symbol,
         decimal amount,
+        int leverage,
         decimal profitPercentage,
         int interval,
         CancellationToken cancellationToken)
@@ -155,12 +164,14 @@ public class TilsonService(IMarketDataService marketDataService,
             symbol,
             actionToTake, 
             amount, 
+            leverage,
             cancellationToken);
 
         while (cancellationToken.IsCancellationRequested == false)
         {
             await TryClosePositionAsync(
                 symbol,
+                leverage,
                 currentPosition,
                 actionToTake,
                 cancellationToken);
@@ -221,10 +232,19 @@ public class TilsonService(IMarketDataService marketDataService,
                 RLogger.AppLog.Information("TAKING PROFIT....");
                 RLogger.AppLog.Information($"PROFIT AMOUNT: {profitAmount}");
 
-                await BuyOrSellAsync(symbol, GetOppositeAction(currentPosition), profitAmount, cancellationToken);
+                await BuyOrSellAsync(
+                    symbol,
+                    GetOppositeAction(currentPosition),
+                    profitAmount,
+                    leverage,
+                    cancellationToken);
             }
 
-            actionToTake = await GetTargetActionAsync(currentPosition, symbol, interval, cancellationToken);
+            actionToTake = await GetTargetActionAsync(
+                currentPosition,
+                symbol,
+                interval,
+                cancellationToken);
         }
     }
 

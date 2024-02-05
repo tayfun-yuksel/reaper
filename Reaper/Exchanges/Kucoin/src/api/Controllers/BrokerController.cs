@@ -10,7 +10,11 @@ public class BrokerController(IBrokerService brokerService,
 {
 
     [HttpGet(nameof(BuyLimitAsync))]
-    public async Task<IActionResult> BuyLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+    public async Task<IActionResult> BuyLimitAsync(
+        string symbol,
+        decimal amount,
+        int leverage,
+        CancellationToken cancellationToken)
     {
         //for testing
         var currentPrice = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
@@ -24,6 +28,7 @@ public class BrokerController(IBrokerService brokerService,
         var response = await brokerService.BuyLimitAsync(
             symbol,
             amount,
+            leverage,
             currentPrice.Data!,
             cancellationToken); 
 
@@ -33,15 +38,27 @@ public class BrokerController(IBrokerService brokerService,
 
 
     [HttpGet(nameof(BuyMarketAsync))]
-    public async Task<IActionResult> BuyMarketAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+    public async Task<IActionResult> BuyMarketAsync(
+        string symbol,
+        decimal amount,
+        int leverage,
+        CancellationToken cancellationToken)
     {
-        var response = await brokerService.BuyMarketAsync(symbol, amount, cancellationToken);
+        var response = await brokerService.BuyMarketAsync(
+            symbol,
+            amount,
+            leverage,
+            cancellationToken);
         return Ok(response);
     }
 
 
     [HttpGet(nameof(SellLimitAsync))]
-    public async Task<IActionResult> SellLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+    public async Task<IActionResult> SellLimitAsync(
+        string symbol,
+        decimal amount,
+        int leverage,
+        CancellationToken cancellationToken)
     {
         var currentPrice = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
         if (currentPrice.Error != null)
@@ -54,6 +71,7 @@ public class BrokerController(IBrokerService brokerService,
         var response = await brokerService.SellLimitAsync(
             symbol,
             amount,
+            leverage,
             currentPrice.Data!,
             cancellationToken);
         return Ok(response);
@@ -61,9 +79,17 @@ public class BrokerController(IBrokerService brokerService,
 
 
     [HttpGet(nameof(SellMarketAsync))]
-    public async Task<IActionResult> SellMarketAsync(string symbol, decimal quantity, CancellationToken cancellationToken)
+    public async Task<IActionResult> SellMarketAsync(
+        string symbol,
+        decimal amount,
+        int leverage,
+        CancellationToken cancellationToken)
     {
-        var response = await brokerService.SellMarketAsync(symbol, quantity, cancellationToken);
+        var response = await brokerService.SellMarketAsync(
+            symbol,
+            amount,
+            leverage,
+            cancellationToken);
         return Ok(response);
     }
 }
