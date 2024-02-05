@@ -15,10 +15,15 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
     private (string buy, string sell) _side_ = ("buy", "sell");
 
     /// <summary>
-    /// Places a market order and returns the filled value
+    /// Places a market order and returns the order id
     /// </summary>
-    internal Func<string, string, string, decimal, CancellationToken, Task<Result<string>>> PlaceMarketOrderAsync =>
-        async(string side, string type, string symbol, decimal amount, CancellationToken cancellationToken) =>
+    internal async Task<Result<string>> PlaceMarketOrderAsync(
+            string side,
+            string type,
+            string symbol,
+            decimal amount,
+            decimal? limitPrice,
+            CancellationToken cancellationToken)
     {
         var priceResult = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
         if (priceResult.Error != null)
@@ -36,6 +41,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
             clientOid = Guid.NewGuid().ToString(),
             symbol = symbol.ToUpper(),
             leverage = 1,
+            price = limitPrice,
             side = side,
             size = quantity,
             type = type
@@ -58,15 +64,17 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
             return new() { Error = result.Error };
         }
 
+        RLogger.AppLog.Information(@$"Order({type}) placed for {symbol} 
+                    at limitPrice: {limitPrice} at {DateTime.UtcNow}");
+
         dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
         var orderId = response.data.orderId;
         return new() { Data = orderId };
-    };
+    }
 
 
 
-    internal Func<string, CancellationToken, Task> WaitUntilActiveOrdersAreFilledAsync =>
-        async(string symbol, CancellationToken cancellationToken) =>
+    internal async Task WaitUntilActiveOrdersAreFilledAsync(string symbol, CancellationToken cancellationToken)
     {
         Result<IEnumerable<string>> result = await orderService.GetActiveOrdersAsync(symbol, cancellationToken);
 
@@ -80,16 +88,20 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
             await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
             await WaitUntilActiveOrdersAreFilledAsync(symbol, cancellationToken);
         }
-    };
+    }
 
 
     internal async Task<Result<string>> EnsureTransactionCompleted(
         string symbol,
-        Func<string, decimal, CancellationToken, Task> action,
         decimal amount,
+        decimal limitPrice,
         string orderId,
+        Func<string, decimal, CancellationToken, Task>? marketAction,
+        Func<string, decimal, decimal, CancellationToken, Task>? limitAction,
         CancellationToken cancellationToken)
     {
+        var msgTemplate = @$"{nameof(BrokerService)}_{nameof(EnsureTransactionCompleted)}: ";
+
         var filledValue = await orderService.GetOrderAmountAsync
             (orderId, cancellationToken);
 
@@ -99,78 +111,158 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
         }
 
         await WaitUntilActiveOrdersAreFilledAsync(symbol, cancellationToken);
-        var difference = amount - filledValue.Data!;
+        var amountToFill = amount - filledValue.Data!;
+        RLogger.AppLog.Information(msgTemplate + $"target-amount: {amount}");
+        RLogger.AppLog.Information(msgTemplate + $"amount filled: {filledValue.Data}");
+        RLogger.AppLog.Information(msgTemplate + $"amount to fill: {amountToFill}");
 
-        if (difference >= 1)
+        if (amountToFill >= 1)
         {
-            RLogger.AppLog.Information($"Buying remaining amount {difference} of {symbol}");
-            await action(symbol, difference, cancellationToken);
+            RLogger.AppLog.Information(msgTemplate + $"buying remaining amount {amountToFill} of {symbol}");
+            if (marketAction != null)
+            {
+                await marketAction(symbol, amountToFill, cancellationToken);
+            }
+            else
+            {
+                await limitAction!(symbol, amountToFill, limitPrice, cancellationToken);
+            }
         }
+        RLogger.AppLog.Information(msgTemplate + "transaction completed");
         return new() { Data = "done" };
 
     }
 
 
-    public async Task<Result<string>> BuyLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+    public async Task<Result<string>> BuyLimitAsync(
+        string symbol,
+        decimal amount,
+        decimal limitPrice,
+        CancellationToken cancellationToken)
     {
-        var orderId = await PlaceMarketOrderAsync(_side_.buy, _type_.limit, symbol, amount, cancellationToken);
+        var orderId = await PlaceMarketOrderAsync(
+            _side_.buy,
+            _type_.limit,
+            symbol,
+            amount,
+            limitPrice,
+            cancellationToken);
+
         if (orderId.Error != null)
         {
             return new() { Error = orderId.Error };
         }
 
+        RLogger.AppLog.Information(@$"{nameof(BrokerService)}: 
+                Limit order buy placed for {symbol} at {limitPrice} at {DateTime.UtcNow}");
+
+
         return await EnsureTransactionCompleted(
             symbol,
-            BuyMarketAsync,
             amount,
+            limitPrice,
             orderId.Data!,
+            marketAction: null,
+            limitAction: BuyLimitAsync,
             cancellationToken);
     }
 
-    public async Task<Result<string>> BuyMarketAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+
+    public async Task<Result<string>> BuyMarketAsync(
+        string symbol,
+        decimal amount,
+        CancellationToken cancellationToken)
     {
-        var orderId = await PlaceMarketOrderAsync(_side_.buy, _type_.market, symbol, amount, cancellationToken);
+        var orderId = await PlaceMarketOrderAsync(
+            _side_.buy,
+            _type_.market,
+            symbol,
+            amount,
+            limitPrice: null,
+            cancellationToken);
+
         if (orderId.Error != null)
         {
             return new() { Error = orderId.Error };
         }
 
+        RLogger.AppLog.Information(@$"{nameof(BrokerService)}: 
+                Market order buy placed for {symbol} at {DateTime.UtcNow}");
+
         return await EnsureTransactionCompleted(
             symbol,
-            BuyMarketAsync,
             amount,
+            limitPrice: 0,
             orderId.Data!,
+            marketAction: BuyMarketAsync,
+            limitAction: null,
             cancellationToken);
     }
 
-    public async Task<Result<string>> SellLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+
+
+    public async Task<Result<string>> SellLimitAsync(
+        string symbol,
+        decimal amount,
+        decimal limitPrice,
+        CancellationToken cancellationToken)
     {
-        var orderId = await PlaceMarketOrderAsync(_side_.sell, _type_.limit, symbol, amount, cancellationToken);
+        var orderId = await PlaceMarketOrderAsync(
+            _side_.sell,
+            _type_.limit,
+            symbol,
+            amount,
+            limitPrice,
+            cancellationToken);
+
         if (orderId.Error != null)
         {
             throw new InvalidOperationException("Error placing market order");
         }
+
+        RLogger.AppLog.Information(@$"{nameof(BrokerService)}: 
+                Limit order sell placed for {symbol} at {limitPrice} at {DateTime.UtcNow}");
+
         return await EnsureTransactionCompleted(
             symbol,
-            SellLimitAsync,
             amount,
+            limitPrice,
             orderId.Data!,
+            marketAction: null,
+            limitAction: SellLimitAsync,
             cancellationToken);
     }
 
-    public async Task<Result<string>> SellMarketAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+
+
+    public async Task<Result<string>> SellMarketAsync(
+        string symbol,
+        decimal amount,
+        CancellationToken cancellationToken)
     {
-        var orderId = await PlaceMarketOrderAsync(_side_.sell, _type_.market, symbol, amount, cancellationToken);
+        var orderId = await PlaceMarketOrderAsync(
+            _side_.sell,
+            _type_.market,
+            symbol,
+            amount,
+            limitPrice: null,
+            cancellationToken);
+
         if (orderId.Error != null)
         {
             throw new InvalidOperationException("Error placing market order");
         }
 
+        RLogger.AppLog.Information(@$"{nameof(BrokerService)}: 
+                Market order sell placed for {symbol} at {DateTime.UtcNow}");
+
         return await EnsureTransactionCompleted(
             symbol,
-            SellMarketAsync,
             amount,
+            limitPrice: 0,
             orderId.Data!,
+            marketAction: SellMarketAsync,
+            limitAction: null,
             cancellationToken);
     }
 }

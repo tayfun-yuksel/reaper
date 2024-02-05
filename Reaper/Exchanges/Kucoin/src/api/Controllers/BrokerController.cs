@@ -1,16 +1,33 @@
 using Microsoft.AspNetCore.Mvc;
 using Reaper.CommonLib.Interfaces;
+using Reaper.Exchanges.Kucoin.Services;
 namespace Reaper.Exchanges.Kucoin.Api;
 
 [ApiController]
 [Route("[controller]")]
-public class BrokerController(IBrokerService brokerService) : ControllerBase
+public class BrokerController(IBrokerService brokerService,
+    IMarketDataService marketDataService) : ControllerBase
 {
 
     [HttpGet(nameof(BuyLimitAsync))]
-    public async Task BuyLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+    public async Task<IActionResult> BuyLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
     {
-        var response = await brokerService.BuyLimitAsync(symbol, amount, cancellationToken);
+        //for testing
+        var currentPrice = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
+        if (currentPrice.Error != null)
+        {
+            throw new InvalidOperationException("Error getting current price", currentPrice.Error);
+        }
+
+        RLogger.AppLog.Information($"Buying {symbol} at {currentPrice.Data!} at {DateTime.UtcNow}");
+
+        var response = await brokerService.BuyLimitAsync(
+            symbol,
+            amount,
+            currentPrice.Data!,
+            cancellationToken); 
+
+        return Ok(response);
     }
     
 
@@ -24,9 +41,22 @@ public class BrokerController(IBrokerService brokerService) : ControllerBase
 
 
     [HttpGet(nameof(SellLimitAsync))]
-    public Task SellLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
+    public async Task<IActionResult> SellLimitAsync(string symbol, decimal amount, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var currentPrice = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
+        if (currentPrice.Error != null)
+        {
+            throw new InvalidOperationException("Error getting current price", currentPrice.Error);
+        }
+
+        RLogger.AppLog.Information($"Selling {symbol} at {currentPrice.Data!} at {DateTime.UtcNow}");
+
+        var response = await brokerService.SellLimitAsync(
+            symbol,
+            amount,
+            currentPrice.Data!,
+            cancellationToken);
+        return Ok(response);
     }
 
 
