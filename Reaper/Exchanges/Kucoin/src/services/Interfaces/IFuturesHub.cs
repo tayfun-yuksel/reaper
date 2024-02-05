@@ -9,4 +9,8 @@ public interface IFuturesHub
         decimal targetPnlPercent,
         CancellationToken cancellationToken);
         
+    Task<Result<(bool takeProfit, decimal profitPnl)>> MonitorPositionChangeAsync(
+        string symbol,
+        decimal targetPnl,
+        CancellationToken cancellationToken);
 }

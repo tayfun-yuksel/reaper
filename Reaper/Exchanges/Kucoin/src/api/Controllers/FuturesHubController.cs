@@ -25,4 +25,20 @@ public class FuturesHubController(IFuturesHub futuresHub,
             profitPercentage,
             cancellationToken);
     }
+
+
+    [HttpGet("MonitorPositionChange")]
+    public async Task<IActionResult> MonitorPositionChangeAsync(
+        [FromQuery] string symbol,
+        [FromQuery] int interval,
+        CancellationToken cancellationToken)
+    {
+        RLogger.AppLog.Information($"Monitoring target action for {symbol} at {DateTime.UtcNow}");
+        var result = await futuresHub.MonitorPositionChangeAsync(
+            symbol,
+            interval,
+            cancellationToken);
+
+        return Ok(result);
+    }
 }
