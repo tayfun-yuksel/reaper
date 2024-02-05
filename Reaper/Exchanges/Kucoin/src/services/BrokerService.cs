@@ -35,7 +35,7 @@ public class BrokerService(IOptions<KucoinOptions> kucoinOptions,
         var marketPrice = priceResult.Data!;
         var quantity = amount / marketPrice;
 
-        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, true);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, false);
 
         var queryParams = new
         {

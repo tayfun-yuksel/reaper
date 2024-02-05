@@ -16,7 +16,7 @@ public class FuturesHub(IOptions<KucoinOptions> options,
     private async Task<(string endpoint, string token)> GetDynamicUrlAsync()
     {
         using var flurlClient = CommonLib.Utils.FlurlExtensions
-            .GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, true);
+            .GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, false);
 
         var getPublicEndpointsFn = async () => await flurlClient.Request()
                 .AppendPathSegments("api", "v1", "bullet-private")

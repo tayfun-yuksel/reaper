@@ -14,7 +14,10 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
 
     public async Task<Result<decimal>> GetSymbolPriceAsync(string symbol, CancellationToken cancellationToken)
     {
-        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, true);
+        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(
+            RLogger.HttpLog,
+            _kucoinOptions.FuturesBaseUrl,
+            false);
 
         var getSymbolPriceFn = async () => await flurlClient.Request()
                 .AppendPathSegments("api", "v1", "contracts", symbol.ToUpper())
@@ -47,7 +50,7 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
         CancellationToken cancellationToken)
     {
         using var flurlClient = CommonLib.Utils.FlurlExtensions
-            .GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, true);
+            .GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, false);
 
         var fromResult = startTime.ToUtcEpochMs();
         var toResult = endTime?.ToUtcEpochMs();
