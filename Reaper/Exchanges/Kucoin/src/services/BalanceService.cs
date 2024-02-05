@@ -13,9 +13,7 @@ public class BalanceService(IOptions<KucoinOptions> kucoinOptions) : IBalanceSer
     public async Task<TBalance?> GetBalanceAsync<TBalance>(string? symbol, CancellationToken cancellationToken)
         where TBalance : class
     {
-        using var flurlClient = CommonLib.Utils.FlurlExtensions
-            .GetFlurlClient(RLogger.HttpLog, _kucoinOptions.BaseUrl, false);
-
+        using var flurlClient = FlurlExtensions.GetHttpClient(_kucoinOptions);
         var getBalanceFn = async () => await flurlClient.Request()
                 .AppendPathSegments("api", "v1", "accounts")
                 .WithSignatureHeaders(_kucoinOptions, "GET")

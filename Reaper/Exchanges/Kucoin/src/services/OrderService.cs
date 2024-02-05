@@ -15,8 +15,7 @@ public class OrderService(IOptions<KucoinOptions> kucoinOptions) : IOrderService
 
     public async Task<Result<decimal>> GetOrderAmountAsync(string orderId, CancellationToken cancellationToken)
     {
-        using var flurlClient = CommonLib.Utils.FlurlExtensions
-            .GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, false);
+        using var flurlClient = FlurlExtensions.GetHttpClient(_kucoinOptions);
 
         var getOrderDetailsFn = async() => await flurlClient.Request()
                 .AppendPathSegments("api", "v1", "orders", orderId)
@@ -44,8 +43,7 @@ public class OrderService(IOptions<KucoinOptions> kucoinOptions) : IOrderService
         string symbol,
         CancellationToken cancellationToken)
     {
-        using var flurlClient = CommonLib.Utils.FlurlExtensions
-            .GetFlurlClient(RLogger.HttpLog, _kucoinOptions.FuturesBaseUrl, false);
+        using var flurlClient = FlurlExtensions.GetHttpClient(_kucoinOptions);
 
         var getActiveOrdersFn = async() => await flurlClient.Request()
                 .AppendPathSegments("api", "v1", "orders")

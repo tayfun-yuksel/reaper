@@ -14,10 +14,7 @@ public class PositionInfoService(IOptions<KucoinOptions> options) : IPositionInf
 
     public async Task<Result<(decimal amount, decimal positionEnterPrice, SignalType position)>> GetPositionInfoAsync(string symbol, CancellationToken cancellationToken)
     {
-        using var flurlClient = CommonLib.Utils.FlurlExtensions.GetFlurlClient(
-            RLogger.HttpLog,
-            _kucoinOptions.FuturesBaseUrl,
-            true);
+        using var flurlClient = FlurlExtensions.GetHttpClient(_kucoinOptions);
 
         var getPositionFn = async () => await flurlClient.Request()
                 .AppendPathSegments("api", "v1", "position")

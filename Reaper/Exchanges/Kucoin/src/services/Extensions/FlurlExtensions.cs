@@ -42,4 +42,9 @@ public static class FlurlExtensions
             .WithHeader("KC-API-KEY-VERSION", "2");
     }
 
+    public static IFlurlClient GetHttpClient(KucoinOptions options) => 
+        CommonLib.Utils.FlurlExtensions.GetFlurlClient(
+            RLogger.HttpLog,
+            options.FuturesBaseUrl,
+            true);
 }
