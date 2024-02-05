@@ -134,7 +134,7 @@ public class TilsonService(IMarketDataService marketDataService,
         //first position
         await TryBuyOrSellAsync(symbol,
             actionToTake, 
-            (await GetPositionDetailsAsync(symbol, cancellationToken)).tradeAmount,
+            amount, 
             cancellationToken);
 
         while (cancellationToken.IsCancellationRequested == false)
