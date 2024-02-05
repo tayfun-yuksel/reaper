@@ -204,6 +204,8 @@ public class TilsonService(IMarketDataService marketDataService,
                 if (httpResponse.Error != null)
                 {
                     RLogger.AppLog.Information($"ERROR WATCHING PROFIT HTTP: {httpResponse.Error}");
+                    RLogger.AppLog.Information("WAITING FOR NEXT INTERVAL....");
+                    await Task.Delay(interval, timeOutCTS.Token);
                     continue;
                 }
                 result = httpResponse.Data;
