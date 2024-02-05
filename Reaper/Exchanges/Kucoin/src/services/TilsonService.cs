@@ -167,6 +167,19 @@ public class TilsonService(IMarketDataService marketDataService,
             leverage,
             cancellationToken);
 
+        using var registration = cancellationToken.Register(() =>
+        {
+            RLogger.AppLog.Information("CANCELLATION REQUESTED....");
+            RLogger.AppLog.Information("STOPPING STRATEGY....");
+            RLogger.AppLog.Information("CLOSING POSITION....");
+            TryClosePositionAsync(
+                symbol,
+                leverage,
+                currentPosition,
+                actionToTake,
+                cancellationToken).Wait();
+        });
+
         while (cancellationToken.IsCancellationRequested == false)
         {
             await TryClosePositionAsync(
@@ -183,7 +196,7 @@ public class TilsonService(IMarketDataService marketDataService,
 
             //try to take profit
             using var timeOutCTS = new CancellationTokenSource(profitTimeOut);
-            timeOutCTS.Token.Register(() =>
+            using var timeoutRegistration = timeOutCTS.Token.Register(() =>
             {
                 RLogger.AppLog.Information("PROFIT TIMEOUT REACHED.........");
                 RLogger.AppLog.Information("STOPPING PROFIT WATCH....");
