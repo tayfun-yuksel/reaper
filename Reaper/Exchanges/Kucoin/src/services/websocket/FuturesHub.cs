@@ -109,28 +109,28 @@ public class FuturesHub(IOptions<KucoinOptions> options,
             if (socketMsgResult.Data!.MessageType == WebSocketMessageType.Text)
             {
                 string response = System.Text.Encoding.UTF8.GetString(buffer, 0, socketMsgResult.Data!.Count);
-                RLogger.AppLog.Information(
-                    $"WatchProfit received message: ",
-                    response);
 
                 dynamic marketData = JsonConvert.DeserializeObject<ExpandoObject>(response);
 
                 if (marketData.type != "message" || marketData.subject != "mark.index.price")
                 {
-                    RLogger.AppLog.Information($"Received subject is not a mark.index.price ");
+                    RLogger.AppLog.Information($"subject is not a mark.index.price ");
                     continue;
                 }
 
-                RLogger.AppLog.Information($"Response: {response}");
 
                 var markPrice = (decimal)marketData.data.markPrice;
                 var currentProfitPercent = (markPrice - entryPrice) / entryPrice; 
 
-                RLogger.AppLog.Information($"currentProfitPercent: {currentProfitPercent}");
+
+                RLogger.AppLog.Information($"SYMBOL: {symbol}");
+                RLogger.AppLog.Information($"ENTRY-PRICE: {entryPrice}");
+                RLogger.AppLog.Information($"MARKET-PRICE: {markPrice}");
+                RLogger.AppLog.Information($"CURRENT-PROFIT: {currentProfitPercent}\n\n");
 
                 if (currentProfitPercent >= targetPnlPercent)
                 {
-                    RLogger.AppLog.Information($"PROFIT TARGET REACHED.........WS {symbol}: {currentProfitPercent}");
+                    RLogger.AppLog.Information($"PROFIT TARGET REACHED.........WS"); 
                     return new() { Data = (true, currentProfitPercent) };
                 }
             }
