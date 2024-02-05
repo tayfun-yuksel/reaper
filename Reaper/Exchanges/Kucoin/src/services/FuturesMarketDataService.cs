@@ -33,7 +33,7 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
         }
 
         dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
-        decimal markPrice = (decimal)response.data.indexPrice;
+        decimal markPrice = (decimal)response.data.markPrice;
 
         return new(){ Data = markPrice };
     }

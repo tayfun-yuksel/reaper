@@ -9,8 +9,8 @@
     <PackageReference Include="Flurl" Version="4.0.0" />
     <PackageReference Include="Flurl.Http" Version="4.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.1.0" />
-    <PackageReference Include="Reaper.CommonLib.Utils" Version="1.1.252" />
-    <PackageReference Include="Reaper.CommonLib.Interfaces" Version="1.1.252" />
-    <PackageReference Include="Reaper.SignalSentinel" Version="1.1.252" />
+    <PackageReference Include="Reaper.CommonLib.Utils" Version="1.1.254" />
+    <PackageReference Include="Reaper.CommonLib.Interfaces" Version="1.1.254" />
+    <PackageReference Include="Reaper.SignalSentinel" Version="1.1.254" />
   </ItemGroup>
 </Project>
