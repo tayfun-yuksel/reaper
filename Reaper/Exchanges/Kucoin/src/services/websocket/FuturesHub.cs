@@ -6,6 +6,7 @@ using Newtonsoft.Json;
 using Reaper.CommonLib.Interfaces;
 using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.Exchanges.Kucoin.Services.Models;
+using Reaper.SignalSentinel.Strategies;
 
 namespace Reaper.Exchanges.Kucoin.Services;
 public class FuturesHub(IOptions<KucoinOptions> options,
@@ -76,6 +77,7 @@ public class FuturesHub(IOptions<KucoinOptions> options,
 
 
     public async Task<Result<(bool takeProfit, decimal profitPercent)>> WatchTargetProfitAsync(
+        SignalType currentPosition,
         string symbol,
         decimal entryPrice,
         decimal targetPnlPercent,
@@ -119,7 +121,9 @@ public class FuturesHub(IOptions<KucoinOptions> options,
 
 
                 var markPrice = (decimal)marketData.data.markPrice;
-                var currentProfitPercent = Math.Abs(markPrice - entryPrice) / entryPrice; 
+                var currentProfitPercent = currentPosition == SignalType.Buy 
+                    ? (markPrice - entryPrice) / entryPrice
+                    : (entryPrice - markPrice) / entryPrice;
 
 
                 RLogger.AppLog.Information($"SYMBOL: {symbol}");

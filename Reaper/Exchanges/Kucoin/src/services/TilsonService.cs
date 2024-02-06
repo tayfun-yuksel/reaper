@@ -203,6 +203,7 @@ public class TilsonService(IMarketDataService marketDataService,
             });
 
             var wsResponse = await futuresHub.WatchTargetProfitAsync(
+                currentPosition,
                 symbol,
                 (await GetPositionDetailsAsync(symbol, cancellationToken)).enterPrice,
                 profitPercentage,
@@ -220,6 +221,7 @@ public class TilsonService(IMarketDataService marketDataService,
                 RLogger.AppLog.Information($"ERROR WATCHING PROFIT WS: {wsResponse.Error}");
 
                 var httpResponse = await WatchProfitHttpAsync(
+                    currentPosition,
                     symbol,
                     (await GetPositionDetailsAsync(symbol, cancellationToken)).enterPrice,
                     profitPercentage,
@@ -264,6 +266,7 @@ public class TilsonService(IMarketDataService marketDataService,
 
 
     private async Task<Result<(bool takeProfit, decimal percent)>> WatchProfitHttpAsync(
+        SignalType currentPosition,
         string symbol,
         decimal entryPrice,
         decimal targetProfitPercent,
@@ -280,7 +283,9 @@ public class TilsonService(IMarketDataService marketDataService,
                 continue;
             }
 
-            var currentProfitRatio = Math.Abs(markPrice.Data - entryPrice) / entryPrice;
+            var currentProfitRatio = currentPosition == SignalType.Buy
+                ? (markPrice.Data! - entryPrice) / entryPrice
+                : (entryPrice - markPrice.Data!) / entryPrice;
 
             if (currentProfitRatio >= targetProfitPercent)
             {

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.Exchanges.Kucoin.Services;
+using Reaper.SignalSentinel.Strategies;
 
 namespace Reaper.Exchanges.Kucoin.Api;
 [ApiController]
@@ -10,6 +11,7 @@ public class FuturesHubController(IFuturesHub futuresHub,
 {
     [HttpGet("WatchTargetProfit")]
     public async Task WatchTargetProfitAsync(
+        [FromQuery] string side,
         [FromQuery] string symbol,
         [FromQuery] decimal profitPercentage,
         CancellationToken cancellationToken)
@@ -20,6 +22,7 @@ public class FuturesHubController(IFuturesHub futuresHub,
             cancellationToken);
 
         var result = await futuresHub.WatchTargetProfitAsync(
+            Enum.Parse<SignalType>(side, true),
             symbol,
             markPriceResult.Data,
             profitPercentage,
