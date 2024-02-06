@@ -64,7 +64,9 @@ public static class KlineConverter
 
             if (!root.TryGetProperty("data", out JsonElement dataArray))
             {
-                throw new InvalidOperationException("The JSON does not contain a 'data' property.");
+                throw new InvalidOperationException(
+                        @$"The JSON does not contain a 'data' property.
+                        {jsonArray}");
             }
 
             List<FuturesKline> marketDataList = [];

@@ -1,15 +1,44 @@
-using System.Dynamic;
+using System.Text.Json;
 using Flurl.Http;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
 using Reaper.CommonLib.Interfaces;
-using Reaper.Exchanges.Kucoin.Services.Converters;
 using Reaper.Exchanges.Kucoin.Services.Models;
 
 namespace Reaper.Exchanges.Kucoin.Services;
 public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarketDataService
 {
     private readonly KucoinOptions _kucoinOptions = options.Value;
+    public static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    public async Task<Result<IEnumerable<SymbolDetail>>> GetSymbolsAsync(CancellationToken cancellationToken)
+    {
+        using var flurlClient = FlurlExtensions.GetHttpClient(_kucoinOptions);
+
+        var getSymbolsFn = async () => await flurlClient.Request()
+                .AppendPathSegments("api", "v1", "contracts", "active")
+                .WithSignatureHeaders(_kucoinOptions, "GET")
+                .GetStreamAsync(HttpCompletionOption.ResponseContentRead, cancellationToken);
+
+        Result<Stream> result = await getSymbolsFn
+            .WithErrorPolicy(RetryPolicies.HttpErrorLogAndRetryPolicy)
+            .CallAsync();
+
+        if (result.Error != null)
+        {
+            return new() { Error = result.Error };
+        }
+
+
+        var symbols = await JsonSerializer.DeserializeAsync<IEnumerable<SymbolDetail>>(
+            result.Data!,
+            JsonOptions,
+            cancellationToken: cancellationToken);
+
+        return new() { Data = symbols };
+    }
 
 
     public async Task<Result<decimal>> GetSymbolPriceAsync(string symbol, CancellationToken cancellationToken)
@@ -32,8 +61,8 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
             return new(){ Error = result.Error };
         }
 
-        dynamic response = JsonConvert.DeserializeObject<ExpandoObject>(result.Data!);
-        decimal markPrice = (decimal)response.data.markPrice;
+        var response = JsonSerializer.Deserialize<SymbolDetail>(result.Data!);
+        decimal markPrice = response!.MarkPrice;
 
         return new(){ Data = markPrice };
     }
@@ -62,10 +91,9 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
         var klinesFn = async () => await flurlClient.Request()
                 .AppendPathSegments("api", "v1", "kline", "query")
                 .SetQueryParams(queryParams)
-                .GetAsync(HttpCompletionOption.ResponseContentRead, cancellationToken)
-                .ReceiveString();
+                .GetStreamAsync(HttpCompletionOption.ResponseContentRead, cancellationToken);
 
-        Result<string> result = await klinesFn
+        Result<Stream> result = await klinesFn
             .WithErrorPolicy(RetryPolicies.HttpErrorLogAndRetryPolicy)
             .CallAsync();
 
@@ -73,7 +101,23 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
         {
             return new(){ Error = result.Error }; 
         }
-        var klines = result.Data!.ToFuturesKlineArray().Data;
+        var futuresKlineResponse = await JsonSerializer.DeserializeAsync<FuturesKlineResponse>(
+            result.Data!,
+            JsonOptions,
+            cancellationToken: cancellationToken);
+
+
+        var klines = futuresKlineResponse!.Data!
+            .Select(x => new FuturesKline
+            {
+                Time = (long)x[0],
+                EntryPrice = x[1],
+                HighestPrice = x[2],
+                LowestPrice = x[3],
+                ClosePrice = x[4],
+                TradingVolume = x[5]
+            });
+
         var prices = klines!
             .Select(x => x.ClosePrice)
             .ToList() as IEnumerable<decimal>;

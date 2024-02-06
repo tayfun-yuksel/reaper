@@ -1,4 +1,3 @@
-
 namespace Reaper.Exchanges.Kucoin.Services;
 public class FuturesKline
 {

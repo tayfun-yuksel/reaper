@@ -1,10 +1,7 @@
-using System.Dynamic;
 using System.Net.WebSockets;
 using Flurl.Http;
-using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
-using Serilog;
 
 namespace Reaper.Exchanges.Kucoin.Services;
 public static class RetryPolicies

@@ -1,6 +1,5 @@
 using System.Globalization;
 using Reaper.SignalSentinel.Strategies;
-using Serilog;
 
 namespace Reaper.Exchanges.Kucoin.Services;
 public class BackTestService(IMarketDataService marketDataService) : IBackTestService
