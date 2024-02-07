@@ -37,15 +37,20 @@ public class TilsonService(IMarketDataService marketDataService,
             period: 6,
             volumeFactor: 0.5m);
 
-        var t3Last = t3Values.Last();
-        var originLast = pricesResult.Data!.Last();
+        var tilsonLast3 = t3Values.TakeLast(3);
+        var originLast3 = pricesResult.Data!.TakeLast(3);
+        var signalOf3 = tilsonLast3.Zip(
+            originLast3!,
+            (t3, origin) => t3 > origin ? SignalType.Buy : SignalType.Sell);
 
-        if (position != SignalType.Buy && t3Last > originLast)
+
+        if (position != SignalType.Buy &&  signalOf3.All(x => x == SignalType.Buy))
         {
             RLogger.AppLog.Information($"Buy signal detected for {symbol} at {DateTime.UtcNow}");
             return SignalType.Buy;
         }
-        else if (position != SignalType.Sell && t3Last < originLast)
+
+        else if (position != SignalType.Sell && signalOf3.All(x => x == SignalType.Sell))
         {
             RLogger.AppLog.Information($"Sell signal detected for {symbol} at {DateTime.UtcNow}");
             return SignalType.Sell;

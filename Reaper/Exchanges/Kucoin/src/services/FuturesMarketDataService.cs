@@ -119,6 +119,7 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
             });
 
         var prices = klines!
+            .OrderBy(x => x.Time)
             .Select(x => x.ClosePrice)
             .ToList() as IEnumerable<decimal>;
 

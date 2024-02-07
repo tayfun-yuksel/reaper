@@ -1,41 +1,13 @@
 namespace Reaper.Exchanges.Kucoin.Services;
 public interface IBackTestService
 {
-    Task<decimal> TilsonT3Async(string symbol,
-                                string startTime,
-                                string? endTime,
-                                int interval,
-                                decimal tradeAmount,
-                                decimal volumeFactor,
-                                CancellationToken cancellationToken);
-    Task<decimal> MACDAsync(string symbol,
-                            string startTime,
-                            string? endTime,
-                            int interval,
-                            decimal tradeAmount,
-                            int shortPeriod,
-                            int longPeriod,
-                            int smoothLine,
-                            CancellationToken cancellationToken);
-    Task<decimal> BollingerBandsAsync(string symbol,
-                                     string startTime,
-                                     string? endTime,
-                                     int interval,
-                                     decimal tradeAmount,
-                                     int period,
-                                     decimal deviationMultiplier,
-                                     CancellationToken cancellationToken);
-
-    Task<decimal> BollingerBandsAndTilsonT3Async(string symbol,
-                                                 string startTime,
-                                                 string? endTime,
-                                                 int interval,
-                                                 decimal tradeAmount,
-                                                 decimal tilsonVolumeFactor,
-                                                 int tilsonPeriod,
-                                                 int bollingerPeriod,
-                                                 decimal deviationMultiplier,
-                                                 CancellationToken cancellationToken);
+    Task<decimal> TradeWithMultipleIndicatorsAsync(string symbol,
+                                                   string startTime,
+                                                   string? endTime,
+                                                   int interval,
+                                                   decimal tradeAmount,
+                                                   string[] indicators,
+                                                   CancellationToken cancellationToken);
 
     // Task<decimal> RSIAsync(string symbol, decimal tradeAmount, int interval, int period, CancellationToken cancellationToken);
 
