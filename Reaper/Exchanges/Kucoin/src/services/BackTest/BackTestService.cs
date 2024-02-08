@@ -123,6 +123,9 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
         return tradeState;
     }
 
+
+
+
     public static TradeState TrySell(
         SignalType actionToTake,
         decimal currentPrice,
@@ -203,6 +206,7 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
         for (int i = offset; i < prices.Length; i++)
         {
             decimal currentPrice = prices[i];
+
             var signals = indicators.Select(indicator =>
             {
                 var indicatorSwitch = indicator.ToLower();
@@ -219,13 +223,13 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
 
             if (signals.All(x => x == SignalType.Buy))
             {
-                tradeState = TryBuy(SignalType.Buy,
+                tradeState = TryBuy(actionToTake: SignalType.Buy,
                     currentPrice,
                     tradeState);
             }
             else if (signals.All(x => x == SignalType.Sell))
             {
-                tradeState = TrySell(SignalType.Sell,
+                tradeState = TrySell(actionToTake: SignalType.Sell,
                     currentPrice,
                     tradeState);
             }

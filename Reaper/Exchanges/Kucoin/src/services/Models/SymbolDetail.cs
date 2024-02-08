@@ -2,6 +2,13 @@ namespace Reaper.Exchanges.Kucoin.Services;
 
 public class SymbolDetail
 {
+    public string Code { get; set; } = string.Empty;
+    public SymbolData Data { get; set; } = new();
+}
+
+public class SymbolData 
+{
+
     public string Symbol { get; set; } = string.Empty;
 
     public decimal MarkPrice { get; set; }

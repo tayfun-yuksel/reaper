@@ -28,7 +28,7 @@ public static class Dependencies
         services.AddScoped<IBackTestService, BackTestService>();
         services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IPositionInfoService, PositionInfoService>();
-        services.AddScoped<ITilsonService, TilsonService>();
+        services.AddScoped<IRunner, Runner>();
         services.AddScoped<IFuturesHub, FuturesHub>();
     }
 }

@@ -1,6 +1,5 @@
-
 namespace Reaper.Exchanges.Kucoin.Interfaces;
-public interface ITilsonService
+public interface IRunner
 {
     Task RunAsync(
         string symbol,
@@ -8,5 +7,6 @@ public interface ITilsonService
         int leverage,
         decimal profitPercentage,
         int interval,
+        string[] indicators,
         CancellationToken cancellationToken);
 }

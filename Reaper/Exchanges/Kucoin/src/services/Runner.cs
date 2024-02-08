@@ -3,54 +3,71 @@ using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.SignalSentinel.Strategies;
 
 namespace Reaper.Exchanges.Kucoin.Services;
-public class TilsonService(IMarketDataService marketDataService,
+public class Runner(IMarketDataService marketDataService,
     IBrokerService brokerService,
     IPositionInfoService positionInfoService,
-    IFuturesHub futuresHub) : ITilsonService
+    IFuturesHub futuresHub) : IRunner
 {
     internal async Task<SignalType> GetTargetActionAsync(
-            SignalType position,
+            SignalType currentPosition,
             string symbol,
             int interval,
+            string[] indicators,
             CancellationToken cancellationToken)
     {
         var endTime = DateTime.UtcNow.ToString("dd-MM-yyyy HH:mm");
-
         var startTime = DateTime.UtcNow
-            .AddMinutes(-(interval * 50))
+            .AddMinutes(-(interval * 70))
             .ToString("dd-MM-yyyy HH:mm");
 
-        var pricesResult = await marketDataService.GetKlinesAsync(
+        var prices = await marketDataService.GetKlinesAsync(
             symbol,
             startTime,
             endTime,
             interval,
             cancellationToken);
 
-        if (pricesResult.Error != null)
+        if (prices.Error != null)
         {
-            throw new InvalidOperationException("Error getting klines", pricesResult.Error);
+            throw new InvalidOperationException("Error getting klines", prices.Error);
         }
 
-        var t3Values = TilsonT3.CalculateT3(
-            [.. pricesResult.Data],
-            period: 6,
-            volumeFactor: 0.5m);
+        var tilsonValues = indicators.Contains("tilson")
+            ? Tilson.GetTilsonValues([.. prices.Data!])
+            : default;
 
-        var tilsonLast3 = t3Values.TakeLast(3);
-        var originLast3 = pricesResult.Data!.TakeLast(3);
-        var signalOf3 = tilsonLast3.Zip(
-            originLast3!,
-            (t3, origin) => t3 > origin ? SignalType.Buy : SignalType.Sell);
+        var bollingerBands = indicators.Contains("bollinger")
+            ? Bollinger.GetBollingerBands([.. prices.Data!])
+            : default;
 
+        var macdValues = indicators.Contains("macd")
+            ? MACD.GetMACDValues([.. prices.Data!])
+            : default;
 
-        if (position != SignalType.Buy &&  signalOf3.All(x => x == SignalType.Buy))
+        var signals = indicators.Select(ind => {
+            int lastIndex = prices.Data!.Count() - 1;
+            return ind.ToLower() switch
+            {
+                "tilson" => Tilson.TilsonSignal(
+                    lastIndex,
+                    [.. prices.Data!],
+                    tilsonValues!),
+                "bollinger" => Bollinger.BollingerSignal(
+                    lastIndex,
+                    [.. prices.Data!],
+                    bollingerBands!),
+                "macd" => MACD.MACDSignal(lastIndex, macdValues!),
+                _ => throw new InvalidOperationException($"Invalid Indicator: {ind}"),
+            };
+        });
+
+        if (currentPosition != SignalType.Buy && signals.All(x => x == SignalType.Buy))
         {
             RLogger.AppLog.Information($"Buy signal detected for {symbol} at {DateTime.UtcNow}");
             return SignalType.Buy;
         }
 
-        else if (position != SignalType.Sell && signalOf3.All(x => x == SignalType.Sell))
+        else if (currentPosition != SignalType.Sell && signals.All(x => x == SignalType.Sell))
         {
             RLogger.AppLog.Information($"Sell signal detected for {symbol} at {DateTime.UtcNow}");
             return SignalType.Sell;
@@ -118,33 +135,67 @@ public class TilsonService(IMarketDataService marketDataService,
         SignalType actionToTake,
         CancellationToken cancellationToken)
     {
-        bool trading = currentAction == SignalType.Buy 
-                                || currentAction == SignalType.Sell; 
-        bool buyOrSell = actionToTake == SignalType.Buy 
+        bool trading = currentAction == SignalType.Buy
+                                || currentAction == SignalType.Sell;
+        bool buyOrSell = actionToTake == SignalType.Buy
                             || actionToTake == SignalType.Sell;
 
-        if (trading && buyOrSell)
+        if (!trading || !buyOrSell)
         {
-            var amountInTrade = (await GetPositionDetailsAsync(symbol, cancellationToken)).amountInTrade;
-            RLogger.AppLog.Information($"CLOSING {currentAction} POSITION....");
-            RLogger.AppLog.Information($"BEFORE: {actionToTake}....");
-
-            //close position
-            await BuyOrSellAsync(
-                symbol,
-                actionToTake,
-                amountInTrade,
-                leverage,
-                cancellationToken);
-            
-            //open position
-            await BuyOrSellAsync(
-                symbol,
-                actionToTake, 
-                amountInTrade,
-                leverage,
-                cancellationToken);
+            return;
         }
+
+        var amountInTrade = (await GetPositionDetailsAsync(symbol, cancellationToken)).amountInTrade;
+        RLogger.AppLog.Information($"CLOSING {currentAction} POSITION....");
+        RLogger.AppLog.Information($"BEFORE: {actionToTake}....");
+
+        //close position
+        await BuyOrSellAsync(
+            symbol,
+            actionToTake,
+            amountInTrade,
+            leverage,
+            cancellationToken);
+
+        //open position
+        await BuyOrSellAsync(
+            symbol,
+            actionToTake,
+            amountInTrade,
+            leverage,
+            cancellationToken);
+    }
+
+
+    private async Task<Result<(bool takeProfit, decimal percent)>> WatchProfitHttpAsync(
+        SignalType currentPosition,
+        string symbol,
+        decimal entryPrice,
+        decimal targetProfitPercent,
+        CancellationToken cancellationToken)
+    {
+        while (cancellationToken.IsCancellationRequested == false)
+        {
+            await Task.Delay(5 * 1000, cancellationToken);
+
+            var markPrice = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
+            if (markPrice.Error != null)
+            {
+                RLogger.AppLog.Information($"ERROR WATHING PROFIT.....: {markPrice.Error}");
+                continue;
+            }
+
+            var currentProfitRatio = currentPosition == SignalType.Buy
+                ? (markPrice.Data! - entryPrice) / entryPrice
+                : (entryPrice - markPrice.Data!) / entryPrice;
+
+            if (currentProfitRatio >= targetProfitPercent)
+            {
+                return new() { Data = (true, currentProfitRatio) };
+            }
+        }
+
+        return new() { Data = (false, 0) };
     }
 
 
@@ -154,14 +205,17 @@ public class TilsonService(IMarketDataService marketDataService,
         int leverage,
         decimal profitPercentage,
         int interval,
+        string[] indicators,
         CancellationToken cancellationToken)
     {
         TimeSpan profitTimeOut = TimeSpan.FromMinutes(interval);
         SignalType currentPosition = SignalType.Undefined;
+
         SignalType actionToTake = await GetTargetActionAsync(
             currentPosition,
             symbol,
             interval,
+            indicators,
             cancellationToken);
 
         //first position
@@ -172,7 +226,7 @@ public class TilsonService(IMarketDataService marketDataService,
             leverage,
             cancellationToken);
 
-        using var registration = cancellationToken.Register(() =>
+        using var _ = cancellationToken.Register(() =>
         {
             RLogger.AppLog.Information("CANCELLATION REQUESTED....");
             RLogger.AppLog.Information("STOPPING STRATEGY....");
@@ -207,7 +261,7 @@ public class TilsonService(IMarketDataService marketDataService,
                 RLogger.AppLog.Information("STOPPING PROFIT WATCH....");
             });
 
-            var wsResponse = await futuresHub.WatchTargetProfitAsync(
+            var profitResponse = await futuresHub.WatchTargetProfitAsync(
                 currentPosition,
                 symbol,
                 (await GetPositionDetailsAsync(symbol, cancellationToken)).enterPrice,
@@ -215,16 +269,17 @@ public class TilsonService(IMarketDataService marketDataService,
                 timeOutCTS.Token);
 
 
-            (bool takeProfit, decimal percent) result;
+            (bool takeProfit, decimal percent) profit;
 
-            if (wsResponse.Data != default)
+            if (profitResponse.Data != default)
             {
-                result = wsResponse.Data;
+                profit = profitResponse.Data;
             }
             else
             {
-                RLogger.AppLog.Information($"ERROR WATCHING PROFIT WS: {wsResponse.Error}");
+                RLogger.AppLog.Information($"ERROR WATCHING PROFIT WS: {profitResponse.Error}");
 
+                //fallback to http
                 var httpResponse = await WatchProfitHttpAsync(
                     currentPosition,
                     symbol,
@@ -239,15 +294,15 @@ public class TilsonService(IMarketDataService marketDataService,
                     await Task.Delay(interval, timeOutCTS.Token);
                     continue;
                 }
-                result = httpResponse.Data;
+                profit = httpResponse.Data;
             }
 
-            RLogger.AppLog.Information($"takeProfit: {result.takeProfit},  profitPercent: {result.percent}");
+            RLogger.AppLog.Information($"takeProfit: {profit.takeProfit},  profitPercent: {profit.percent}");
 
-            if (result.takeProfit)
+            if (profit.takeProfit)
             {
                 var (amountInTrade, enterPrice) = await GetPositionDetailsAsync(symbol, cancellationToken);
-                var profitAmount = amountInTrade * result.percent;
+                var profitAmount = amountInTrade * profit.percent;
 
                 RLogger.AppLog.Information("TAKING PROFIT....");
                 RLogger.AppLog.Information($"PROFIT AMOUNT: {profitAmount}");
@@ -264,40 +319,11 @@ public class TilsonService(IMarketDataService marketDataService,
                 currentPosition,
                 symbol,
                 interval,
+                indicators,
                 cancellationToken);
         }
     }
 
 
 
-    private async Task<Result<(bool takeProfit, decimal percent)>> WatchProfitHttpAsync(
-        SignalType currentPosition,
-        string symbol,
-        decimal entryPrice,
-        decimal targetProfitPercent,
-        CancellationToken cancellationToken)
-    {
-        while (cancellationToken.IsCancellationRequested == false)
-        {
-            await Task.Delay(5 * 1000, cancellationToken);
-
-            var markPrice = await marketDataService.GetSymbolPriceAsync(symbol, cancellationToken);
-            if (markPrice.Error != null)
-            {
-                RLogger.AppLog.Information($"ERROR WATHING PROFIT.....: {markPrice.Error}");
-                continue;
-            }
-
-            var currentProfitRatio = currentPosition == SignalType.Buy
-                ? (markPrice.Data! - entryPrice) / entryPrice
-                : (entryPrice - markPrice.Data!) / entryPrice;
-
-            if (currentProfitRatio >= targetProfitPercent)
-            {
-                return new() { Data = (true, currentProfitRatio) };
-            }
-        }
-
-        return new() { Data = (false, 0) };
-    }
 }

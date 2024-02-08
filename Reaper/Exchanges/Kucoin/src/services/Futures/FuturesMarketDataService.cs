@@ -61,8 +61,8 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
             return new(){ Error = result.Error };
         }
 
-        var response = JsonSerializer.Deserialize<SymbolDetail>(result.Data!);
-        decimal markPrice = response!.MarkPrice;
+        var response = JsonSerializer.Deserialize<SymbolDetail>(result.Data!, JsonOptions); 
+        decimal markPrice = response!.Data.MarkPrice;
 
         return new(){ Data = markPrice };
     }
@@ -119,7 +119,7 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
             });
 
         var prices = klines!
-            .OrderBy(x => x.Time)
+            .OrderByDescending(x => x.Time)
             .Select(x => x.ClosePrice)
             .ToList() as IEnumerable<decimal>;
 

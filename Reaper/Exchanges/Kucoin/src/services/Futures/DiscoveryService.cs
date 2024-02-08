@@ -16,10 +16,10 @@ public class DiscoveryService(IMarketDataService marketDataService)
         }
 
         var topGainers = symbols.Data!
-            .Where(x => x.Symbol.Contains(symbol.ToUpper(), StringComparison.InvariantCultureIgnoreCase))
-            .OrderByDescending(x => x.PriceChgPct)
+            .Where(x => x.Data.Symbol.Contains(symbol.ToUpper(), StringComparison.InvariantCultureIgnoreCase))
+            .OrderByDescending(x => x.Data.PriceChgPct)
             .Take(limit)
-            .Select(x => x.Symbol);
+            .Select(x => x.Data.Symbol);
 
         return  new() { Data = topGainers };
     }
