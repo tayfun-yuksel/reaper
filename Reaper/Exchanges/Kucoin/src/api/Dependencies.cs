@@ -17,7 +17,10 @@ public static class Dependencies
     public static void AddReaperServices(this IServiceCollection services)
     {
         var configuration = new ConfigurationBuilder()
+        //todo: remove setbase path( it is for notebook)
+        // .SetBasePath("C:\\Users\\tyueksel\\Desktop\\Reaper_\\reaper\\Reaper\\Exchanges\\Kucoin\\src\\api")
         .AddJsonFile("appsettings.json")
+
         .AddUserSecrets<Program>()
         .Build();
 
@@ -30,5 +33,6 @@ public static class Dependencies
         services.AddScoped<IPositionInfoService, PositionInfoService>();
         services.AddScoped<IRunner, Runner>();
         services.AddScoped<IFuturesHub, FuturesHub>();
+        services.AddScoped<IBreakout, Breakout>();
     }
 }

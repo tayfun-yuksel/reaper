@@ -8,7 +8,9 @@
   <ItemGroup>
     <PackageReference Include="Flurl" Version="4.0.0" />
     <PackageReference Include="Flurl.Http" Version="4.0.1" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.1.0" />
+    <PackageReference Include="Microsoft.ML" Version="3.0.1" />
     <PackageReference Include="Polly" Version="8.2.1" />
     <PackageReference Include="Reaper.CommonLib.Utils" Version="1.1.255" />
     <PackageReference Include="Reaper.CommonLib.Interfaces" Version="1.1.255" />

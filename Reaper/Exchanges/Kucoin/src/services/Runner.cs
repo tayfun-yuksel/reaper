@@ -20,41 +20,42 @@ public class Runner(IMarketDataService marketDataService,
             .AddMinutes(-(interval * 70))
             .ToString("dd-MM-yyyy HH:mm");
 
-        var prices = await marketDataService.GetKlinesAsync(
+        var klines = await marketDataService.GetKlinesAsync(
             symbol,
             startTime,
             endTime,
             interval,
             cancellationToken);
 
-        if (prices.Error != null)
+        if (klines.Error != null)
         {
-            throw new InvalidOperationException("Error getting klines", prices.Error);
+            throw new InvalidOperationException("Error getting klines", klines.Error);
         }
 
+        var prices = klines.Data!.Select(x => x.Close).ToArray();
         var tilsonValues = indicators.Contains("tilson")
-            ? Tilson.GetTilsonValues([.. prices.Data!])
+            ? Tilson.GetTilsonValues(prices)
             : default;
 
         var bollingerBands = indicators.Contains("bollinger")
-            ? Bollinger.GetBollingerBands([.. prices.Data!])
+            ? Bollinger.GetBollingerBands(prices)
             : default;
 
         var macdValues = indicators.Contains("macd")
-            ? MACD.GetMACDValues([.. prices.Data!])
+            ? MACD.GetMACDValues(prices)
             : default;
 
         var signals = indicators.Select(ind => {
-            int lastIndex = prices.Data!.Count() - 1;
+            int lastIndex = klines.Data!.Count() - 1;
             return ind.ToLower() switch
             {
                 "tilson" => Tilson.TilsonSignal(
                     lastIndex,
-                    [.. prices.Data!],
+                    prices,
                     tilsonValues!),
                 "bollinger" => Bollinger.BollingerSignal(
                     lastIndex,
-                    [.. prices.Data!],
+                    prices,
                     bollingerBands!),
                 "macd" => MACD.MACDSignal(lastIndex, macdValues!),
                 _ => throw new InvalidOperationException($"Invalid Indicator: {ind}"),
@@ -278,8 +279,8 @@ public class Runner(IMarketDataService marketDataService,
             else
             {
                 RLogger.AppLog.Information($"ERROR WATCHING PROFIT WS: {profitResponse.Error}");
+                RLogger.AppLog.Information("FALLING BACK TO HTTP....");
 
-                //fallback to http
                 var httpResponse = await WatchProfitHttpAsync(
                     currentPosition,
                     symbol,

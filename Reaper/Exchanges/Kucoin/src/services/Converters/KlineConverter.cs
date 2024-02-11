@@ -75,11 +75,11 @@ public static class KlineConverter
                 FuturesKline marketData = new()
                 {
                     Time = element[0].GetInt64(),
-                    EntryPrice = element[1].GetDecimal(),
-                    HighestPrice = element[2].GetDecimal(),
-                    LowestPrice = element[3].GetDecimal(),
-                    ClosePrice = element[4].GetDecimal(),
-                    TradingVolume = element[5].GetDecimal()
+                    Open = element[1].GetDecimal(),
+                    High = element[2].GetDecimal(),
+                    Low = element[3].GetDecimal(),
+                    Close = element[4].GetDecimal(),
+                    Volume = element[5].GetDecimal()
                 };
                 marketDataList.Add(marketData);
             }

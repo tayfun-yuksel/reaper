@@ -44,7 +44,7 @@ public static class WsExtensions
         string topic,
         CancellationToken cancellationToken)
     {
-        using ClientWebSocket webSocket = new();
+        ClientWebSocket webSocket = new();
         var subscribeFn = async() =>
         {
             var (endpoint, token) = await GetDynamicUrlAsync(kucoinOptions);
@@ -52,7 +52,7 @@ public static class WsExtensions
 
             await webSocket.ConnectAsync(futuresUrl, CancellationToken.None);
 
-            ArraySegment<byte> bytesToSend = new(System.Text.Encoding.UTF8.GetBytes(topic));
+            ArraySegment<byte> bytesToSend = new(Encoding.UTF8.GetBytes(topic));
 
             await webSocket.SendAsync(
                 bytesToSend,

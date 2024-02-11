@@ -1,3 +1,16 @@
 bollinger bands => calculate volatility give potential pairs to trade
 macd => calculate spot orders only strong bullish signals
 tilson => futures trading, design a take profit strategy
+
+
+plotting-breakout:
+    get price data
+    calculate pivots
+    calculate high regression line
+    calculate low regression line
+    save data to csv file
+    plot data:
+        plot price candlestick chart
+        plot pivot points
+        plot high regression line
+        plot low regression line

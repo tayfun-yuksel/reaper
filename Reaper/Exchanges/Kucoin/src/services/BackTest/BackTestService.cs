@@ -90,7 +90,7 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
             from = to;
             (from, to) = shiftTime200Kline(from, interval);
 
-            prices.AddRange(klinesResult.Data!);
+            prices.AddRange(klinesResult.Data!.Select(x => x.Close));
 
             if (!klinesResult.Data!.Any() || DateTime.ParseExact(
                     to,

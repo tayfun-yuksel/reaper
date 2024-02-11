@@ -69,7 +69,7 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
 
 
 
-    public async Task<Result<IEnumerable<decimal>>> GetKlinesAsync(string symbol,
+    public async Task<Result<IEnumerable<FuturesKline>>> GetKlinesAsync(string symbol,
         string startTime,
         string? endTime,
         int interval,
@@ -111,18 +111,14 @@ public class FuturesMarketDataService(IOptions<KucoinOptions> options) : IMarket
             .Select(x => new FuturesKline
             {
                 Time = (long)x[0],
-                EntryPrice = x[1],
-                HighestPrice = x[2],
-                LowestPrice = x[3],
-                ClosePrice = x[4],
-                TradingVolume = x[5]
+                Open = x[1],
+                High = x[2],
+                Low = x[3],
+                Close = x[4],
+                Volume = x[5]
             });
 
-        var prices = klines!
-            .OrderByDescending(x => x.Time)
-            .Select(x => x.ClosePrice)
-            .ToList() as IEnumerable<decimal>;
 
-        return new(){ Data = prices };
+        return new(){ Data = klines };
     }
 }
