@@ -4,7 +4,11 @@ using Reaper.SignalSentinel.Strategies;
 namespace Reaper.Exchanges.Kucoin.Services;
 public class BackTestService(IMarketDataService marketDataService) : IBackTestService
 {
-    public record TradeState (SignalType CurrentPos, decimal Assets, decimal TradeCapital, decimal EntryPrice);
+    public record TradeState (
+        SignalType CurrentPos,
+        decimal Assets,
+        decimal TradeCapital,
+        decimal EntryPrice);
 
     internal static void LogTradeState(TradeState state, string symbol, decimal currentPrice)
     {
@@ -14,26 +18,22 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
         RLogger.AppLog.Information($"Current Balance: {state.Assets * currentPrice} \n");
     }
 
-    internal static decimal GetProfitAmount(
-        decimal entryPrice,
-        decimal currentPrice,
-        decimal assests,
-        SignalType position)
+    internal static decimal GetProfitAmount(decimal currentPrice, TradeState tradeState)
     {
-        if (position != SignalType.Buy && position != SignalType.Sell)
+        if (tradeState.CurrentPos!= SignalType.Buy && tradeState.CurrentPos != SignalType.Sell)
         {
             return 0;
         }
 
         decimal profit;
-        if (position == SignalType.Buy)
+        if (tradeState.CurrentPos == SignalType.Buy)
         {
-            profit = (currentPrice - entryPrice) * assests;
+            profit = (currentPrice - tradeState.EntryPrice) * tradeState.Assets;
             RLogger.AppLog.Information($"Realized Profit From Long: {profit}");
             return profit;
         }
 
-        profit = (entryPrice - currentPrice) * assests;
+        profit = (tradeState.EntryPrice - currentPrice) * tradeState.Assets;
         RLogger.AppLog.Information($"Realized Profit From Short: {profit}");
         return profit;
     }
@@ -112,13 +112,9 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
         if (tradeState.CurrentPos != SignalType.Buy && actionToTake == SignalType.Buy)
         {
             var assets = tradeState.TradeCapital / currentPrice;
-            var tradingCapital = tradeState.TradeCapital +  GetProfitAmount(
-                        tradeState.EntryPrice,
-                        currentPrice,
-                        tradeState.Assets,
-                        tradeState.CurrentPos);
+            var tradingCapital = tradeState.TradeCapital +  GetProfitAmount(currentPrice, tradeState);
 
-            return new(SignalType.Buy, assets, tradingCapital, EntryPrice: currentPrice);
+            return new(CurrentPos: SignalType.Buy, assets, tradingCapital, EntryPrice: currentPrice);
         }
         return tradeState;
     }
@@ -135,11 +131,7 @@ public class BackTestService(IMarketDataService marketDataService) : IBackTestSe
         {
 
             var assets = tradeState.TradeCapital / currentPrice;
-            var tradeCapital = tradeState.TradeCapital + GetProfitAmount(
-                tradeState.EntryPrice,
-                currentPrice,
-                assets,
-                tradeState.CurrentPos);
+            var tradeCapital = tradeState.TradeCapital + GetProfitAmount(currentPrice, tradeState);
 
             return new(SignalType.Sell, assets, tradeCapital, EntryPrice: currentPrice);
         }

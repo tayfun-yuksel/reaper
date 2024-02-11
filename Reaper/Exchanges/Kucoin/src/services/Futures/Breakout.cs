@@ -1,9 +1,11 @@
+using System.CodeDom.Compiler;
 using System.Globalization;
 using MathNet.Numerics;
 using Reaper.CommonLib.Interfaces;
 using Reaper.CommonLib.Utils;
 using Reaper.Exchanges.Kucoin.Interfaces;
 using Reaper.SignalSentinel.Strategies;
+using static Reaper.Exchanges.Kucoin.Services.BackTestService;
 
 namespace Reaper.Exchanges.Kucoin.Services;
 public class Breakout(IMarketDataService marketDataService) : IBreakout
@@ -17,7 +19,14 @@ public class Breakout(IMarketDataService marketDataService) : IBreakout
         double RSquaredHighs);
 
     public enum PivotType { Undefined, Low, High }
-    public record Pivot(int Index, PivotType Type,  decimal Value, long Time); 
+
+    public record Pivot(
+        int Index,
+        PivotType Type,
+        decimal Price,
+        long Time); 
+    
+    public record BreakoutData(int Index, decimal Price, SignalType Signal, long Time);
 
 
     public static (double Slope, double Intercept, double RSquared) CalculateRegression(
@@ -105,10 +114,10 @@ public class Breakout(IMarketDataService marketDataService) : IBreakout
         if (lows.Count >= 2 && highs.Count >= 2)
         {
             var (lSlope, lIntercept, lRSquared) = CalculateRegression(
-                    lows.Select(x => (double)x.Value).ToList(),
+                    lows.Select(x => (double)x.Price).ToList(),
                     lows.Select(x => (double)x.Index).ToList());
             var (hSlope, hIntercept, hRSquared) = CalculateRegression(
-                highs.Select(x => (double)x.Value).ToList(),
+                highs.Select(x => (double)x.Price).ToList(),
                 highs.Select(x => (double)x.Index).ToList());
 
             return new(
@@ -125,12 +134,20 @@ public class Breakout(IMarketDataService marketDataService) : IBreakout
 
 
 
-    private static SignalType GetBreakOutSignal(List<FuturesKline> priceData, int candle, int backcandles, int window)
+    private static BreakoutData GetBreakOutSignal(List<FuturesKline> priceData, int candle, int backcandles, int window)
     {
-        if (candle - backcandles - window < 0) return 0;
+        var breakoutData = new BreakoutData(
+            candle,
+            priceData[candle].Close,
+            SignalType.Undefined,
+            priceData[candle].Time); 
 
-        var candlesToAnalyse = priceData[(candle - backcandles - window).. (candle + 1)];
-        var pivots = candlesToAnalyse.Select((c, index) => GetPivot(candlesToAnalyse, index, window));
+        if (candle - backcandles - window < 0 || candle + 20 >= priceData.Count){
+            return breakoutData;
+        }
+
+
+        var pivots = priceData.Select((c, index) => GetPivot(priceData, index, window));
         var channel = CollectChannel(pivots);
 
         RLogger.AppLog.Information(@$"SlopeLows: {channel.SlopeLows},
@@ -157,25 +174,32 @@ public class Breakout(IMarketDataService marketDataService) : IBreakout
                     && (double)currCandle.Open > channelHigh(candle)
                     && (double)currCandle.Close > channelHigh(candle);
 
-        return breakoutToHigh 
-            ? SignalType.Buy 
-            : breakoutToLow 
-                ? SignalType.Sell 
-                : SignalType.Undefined;
+        return breakoutToHigh
+            ? new BreakoutData(candle, currCandle.Close, SignalType.Buy, currCandle.Time)
+            : breakoutToLow
+                ? new BreakoutData(candle, currCandle.Close, SignalType.Sell, currCandle.Time)
+                : breakoutData;
+        
     }
 
+    internal static TradeState Trade(TradeState tradeState, SignalType actionToTake, decimal currentPrice) 
+        => actionToTake == SignalType.Buy
+            ? BackTestService.TryBuy(actionToTake, currentPrice, tradeState)
+            : actionToTake == SignalType.Sell
+                ? BackTestService.TrySell(actionToTake, currentPrice, tradeState)
+                : tradeState;
 
-// plotting-breakout:
-//     get price data
-//     calculate pivots
-//     calculate high regression line
-//     calculate low regression line
-//     save data to csv file
-//     plot data:
-//         plot price candlestick chart
-//         plot pivot points
-//         plot high regression line
-//         plot low regression line
+    // plotting-breakout:
+    //     get price data
+    //     calculate pivots
+    //     calculate high regression line
+    //     calculate low regression line
+    //     save data to csv file
+    //     plot data:
+    //         plot price candlestick chart
+    //         plot pivot points
+    //         plot high regression line
+    //         plot low regression line
     public async Task PrepareDataForPlottingAsync(string symbol, string startTime, int interval)
     {
         var priceData = await marketDataService.GetKlinesAsync(
@@ -189,30 +213,72 @@ public class Breakout(IMarketDataService marketDataService) : IBreakout
             return;
         }
 
+        var window = 3;
+        var backcandles = 10;
+
         var prices = priceData.Data!.ToList();
-        var pivots = prices.Select((c, index) => GetPivot(prices, index, window: 7));
+
+        var pivots = prices.Select((c, index) => GetPivot(prices, index, window));
+        var breakOuts = prices.Select((c, index) => GetBreakOutSignal(prices, index, backcandles, window));
 
         var channel = CollectChannel(pivots);
+
         var channelLow = (int x) => channel.SlopeLows * x + channel.InterceptLows;
         var channelHigh = (int x) => channel.SlopeHighs * x + channel.InterceptHighs;
 
+
         string file = new FileInfo(Environment.CurrentDirectory + "/Futures/analysis/breakout.csv")
-            .FullName.Replace("api", "services");
+                            .FullName.Replace("api", "services");
         using var writer = new StreamWriter(file);
         // Write the header line
-        writer.WriteLine("Date,Open,High,Low,Close,ChannelLow,ChannelHigh,PivotType,PivotValue");
+        writer.WriteLine("Date,Open,High,Low,Close,ChannelLow,ChannelHigh,PivotType,PivotValue,breakoutAction,tradeAmount");
 
-        int index = 0;  
-        foreach (var candle in prices)
+
+
+        TradeState tradeState = new(
+            CurrentPos: SignalType.Undefined,
+            Assets: 0m,
+            TradeCapital: 100m,
+            EntryPrice: -1);
+
+
+        for (int i=0; i < prices.Count; i++)
         {
-            // Convert date to a culture-invariant format
+            var candle = prices[i];
             string dateString = candle.Time.FromUtcMsToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            var breakoutAction = breakOuts.ElementAt(i);
 
+            tradeState = Trade(tradeState, breakoutAction.Signal, currentPrice: candle.Close);
+            if (breakoutAction.Signal != SignalType.Undefined)
+            {
+                Console.WriteLine($"Trade action: {breakoutAction.Signal} at {dateString}");
+                Console.WriteLine($"Trade amount: {tradeState.TradeCapital}");
+            }
             // Write the data line
-            writer.WriteLine($"{dateString},{candle.Open},{candle.High},{candle.Low},{candle.Close},{channelLow(index)},{channelHigh(index)},{pivots.ElementAt(index)?.Type},{pivots.ElementAt(index)?.Value}");
-            index++;
+            writer.WriteLine($"{dateString}," +
+                $"{candle.Open}," +
+                $"{candle.High}," +
+                $"{candle.Low}," +
+                $"{candle.Close}," +
+                $"{channelLow(i)}," + 
+                $"{channelHigh(i)}," + 
+                $"{pivots.ElementAt(i)?.Type}," + 
+                $"{pivots.ElementAt(i)?.Price}," +
+                $"{breakoutAction.Signal}," +
+                $"{tradeState.TradeCapital}");
+        }
+        decimal profit = 0m;
+        var lastPrice = prices.Last().Close;
+        if (tradeState.CurrentPos == SignalType.Buy)
+        {
+            profit = tradeState.Assets * (lastPrice - tradeState.EntryPrice);
+        }
+        else if (tradeState.CurrentPos == SignalType.Sell)
+        {
+            profit = tradeState.Assets * (tradeState.EntryPrice - lastPrice); 
         }
 
+        Console.WriteLine($"\n\n Final Trade amount: {tradeState.TradeCapital + profit}");
         //todo plot data
         // Plot the data
     }
@@ -249,9 +315,9 @@ public class Breakout(IMarketDataService marketDataService) : IBreakout
                 backcandles: 10,
                 window: 3);
 
-            if (breakoutSignal != SignalType.Undefined)
+            if (breakoutSignal.Signal != SignalType.Undefined)
             {
-                return new() { Data = (symbolDetail.Data.Symbol, breakoutSignal)};
+                return new() { Data = (symbolDetail.Data.Symbol, breakoutSignal.Signal)};
             }
         }
 

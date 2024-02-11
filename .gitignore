@@ -6,6 +6,7 @@
 
 #app logs
 Reaper/Exchanges/Kucoin/src/api/logs**
+*.csv
 
 prompt.txt
 trash/
