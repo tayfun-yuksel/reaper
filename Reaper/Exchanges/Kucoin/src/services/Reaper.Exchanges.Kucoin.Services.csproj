@@ -10,14 +10,16 @@
     <PackageReference Include="Flurl.Http" Version="4.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.1.0" />
     <PackageReference Include="Polly" Version="8.2.1" />
-    <PackageReference Include="Reaper.CommonLib.Utils" Version="1.1.255" />
-    <PackageReference Include="Reaper.CommonLib.Interfaces" Version="1.1.255" />
-    <PackageReference Include="Reaper.SignalSentinel" Version="1.1.255" />
     <PackageReference Include="Serilog" Version="3.1.2-dev-02097" />
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.1" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.1-dev-10370" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="8.0.1-dev-00561" />
     <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="5.0.1-dev-00972" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\CommonLib\src\Interfaces\Reaper.CommonLib.Interfaces.csproj" />
+    <ProjectReference Include="..\..\..\..\CommonLib\src\Utils\Reaper.CommonLib.Utils.csproj" />
+    <ProjectReference Include="..\..\..\..\SignalSentinel\src\Reaper.SignalSentinel.csproj" />
   </ItemGroup>
 </Project>

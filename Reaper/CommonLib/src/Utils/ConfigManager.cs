@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 
 namespace Reaper.CommonLib.Utils;
-public class ConfigManager
+public static class ConfigManager
 {
     public static IConfiguration GetConfiguration()
     {
